@@ -92,17 +92,20 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
 
         foreach ($context->getBeforeMethods() as $afterMethod) {
             assert(method_exists($benchmark, $afterMethod));
-            $benchmark->$afterMethod($parameters);
+            /** @phpstan-ignore-next-line method.dynamicName */
+            $benchmark->{$afterMethod}($parameters);
         }
 
         for ($i = 0; $i < $context->getWarmup() ?: 0; $i++) {
-            $benchmark->$methodName($parameters);
+            /** @phpstan-ignore-next-line method.dynamicName */
+            $benchmark->{$methodName}($parameters);
         }
 
         $this->handle->reset();
         $this->handle->enable();
 
         for ($i = 0; $i < $context->getRevolutions(); $i++) {
+            /** @phpstan-ignore-next-line method.dynamicName */
             $benchmark->{$methodName}($parameters);
         }
 
@@ -117,9 +120,6 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
 
         // @TODO only one result per class is allowed - lame as fuck
         foreach ($rr->values as $eventName => $count) {
-            assert(is_string($eventName));
-            assert(is_integer($count));
-
             $results[] = new PerfidiousResult(
                 eventName: $eventName,
                 count: $count,
@@ -136,6 +136,7 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
 
         foreach ($context->getAfterMethods() as $afterMethod) {
             assert(method_exists($benchmark, $afterMethod));
+            /** @phpstan-ignore-next-line method.dynamicName */
             $benchmark->{$afterMethod}($parameters);
         }
 

@@ -7,6 +7,10 @@ parameters:
     level: max
     paths:
         - src
+        - stubs
         - tests
+    stubFiles:
+        - stubs/perfidious.stub.php
     strictRules:
+        disallowedConstructs: false
         strictCalls: false

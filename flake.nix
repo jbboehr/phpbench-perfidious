@@ -16,13 +16,18 @@
   description = "jbboehr/phpbench-perfidious";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    systems.url = "github:nix-systems/default-linux";
     flake-utils = {
       url = "github:numtide/flake-utils";
+      inputs.systems.follows = "systems";
     };
     pre-commit-hooks = {
       url = "github:cachix/pre-commit-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs-stable.follows = "nixpkgs";
+      inputs.gitignore.follows = "gitignore";
     };
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
@@ -31,30 +36,27 @@
     perfidious = {
       url = "github:jbboehr/php-perf";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs-unstable.follows = "nixpkgs-unstable";
+      inputs.systems.follows = "systems";
+      inputs.flake-utils.follows = "flake-utils";
     };
   };
 
   outputs = {
     self,
     nixpkgs,
+    nixpkgs-unstable,
+    systems,
     flake-utils,
     pre-commit-hooks,
     gitignore,
     perfidious,
-    ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
-      buildEnv = php:
-        php.buildEnv {
-          extraConfig = "memory_limit = 2G";
-          extensions = {
-            enabled,
-            all,
-          }:
-            enabled ++ [all.pcov perfidious.packages.${system}.php81-gcc];
-        };
       pkgs = nixpkgs.legacyPackages.${system};
-      php = buildEnv pkgs.php81;
+      pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
+      inherit (pkgs) lib;
+
       src = gitignore.lib.gitignoreSource ./.;
 
       pre-commit-check = pre-commit-hooks.lib.${system}.run {
@@ -66,24 +68,66 @@
           shellcheck.enable = true;
         };
       };
+
+      buildEnv = {
+        php,
+        perfidious,
+        withPcov ? true,
+      }:
+        php.buildEnv {
+          extraConfig = "memory_limit = 2G";
+          extensions = {
+            enabled,
+            all,
+          }:
+            enabled ++ [perfidious] ++ (lib.optional withPcov all.pcov);
+        };
+
+      makeShell = {
+        php,
+        perfidious,
+        withPcov ? true,
+      }: let
+        php' = buildEnv {inherit php perfidious withPcov;};
+      in
+        pkgs.mkShell {
+          buildInputs = with pkgs; [
+            actionlint
+            alejandra
+            mdl
+            php'
+            php'.packages.composer
+            pre-commit
+          ];
+          shellHook = ''
+            ${pre-commit-check.shellHook}
+            export PATH="$PWD/vendor/bin:$PATH"
+          '';
+        };
     in rec {
       checks = {
         inherit pre-commit-check;
       };
 
-      devShells.default = pkgs.mkShell {
-        buildInputs = with pkgs; [
-          actionlint
-          alejandra
-          mdl
-          php
-          php.packages.composer
-          pre-commit
-        ];
-        shellHook = ''
-          ${pre-commit-check.shellHook}
-          export PATH="$PWD/vendor/bin:$PATH"
-        '';
+      devShells = rec {
+        php81 = makeShell {
+          php = pkgs.php81;
+          perfidious = perfidious.packages.${system}.php81-gcc;
+        };
+        php82 = makeShell {
+          php = pkgs.php82;
+          perfidious = perfidious.packages.${system}.php82-gcc;
+        };
+        php83 = makeShell {
+          php = pkgs.php83;
+          perfidious = perfidious.packages.${system}.php83-gcc;
+        };
+        php84 = makeShell {
+          php = pkgs-unstable.php84;
+          perfidious = perfidious.packages.${system}.php84-gcc;
+          withPcov = false;
+        };
+        default = php81;
       };
 
       formatter = pkgs.alejandra;

@@ -68,7 +68,8 @@ class PerfidiousResult implements ResultInterface
     public function getMetrics(): array
     {
         return [
-            'eventName' => $this->eventName,
+            // @TODO fixme
+            // 'eventName' => $this->eventName,
             'count' => $this->count,
             'timeRunning' => $this->timeRunning,
             'timeEnabled' => $this->timeEnabled,
