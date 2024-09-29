@@ -23,7 +23,10 @@ use PhpBench\DependencyInjection\ExtensionInterface;
 use PhpBench\Executor\CompositeExecutor;
 use PhpBench\Executor\Method\ErrorHandlingExecutorDecorator;
 use PhpBench\Executor\Method\LocalMethodExecutor;
+use PhpBench\Extension\ReportExtension;
 use PhpBench\Extension\RunnerExtension;
+use PhpBench\Report\Generator\BareGenerator;
+use PhpBench\Report\Transform\SuiteCollectionTransformer;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PerfidiousExtension implements ExtensionInterface
@@ -34,7 +37,7 @@ class PerfidiousExtension implements ExtensionInterface
 
     public function load(Container $container): void
     {
-        $container->register(PerfidiousExecutor::class . '.composite', function (Container $container) {
+        $container->register(PerfidiousExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
             $executor = $container->get(PerfidiousExecutor::class);
             assert($executor instanceof PerfidiousExecutor);
 
@@ -47,7 +50,7 @@ class PerfidiousExtension implements ExtensionInterface
             );
         }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious']]);
 
-        $container->register(PerfidiousExecutor::class, function (Container $container) {
+        $container->register(PerfidiousExecutor::class, static function (Container $container): PerfidiousExecutor {
             $bootstrap = $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP);
             assert(is_string($bootstrap) || is_null($bootstrap));
 
@@ -55,5 +58,11 @@ class PerfidiousExtension implements ExtensionInterface
                 $bootstrap,
             );
         });
+
+        $container->register(PerfidiousGenerator::class, static function (Container $container): PerfidiousGenerator {
+            $transformer = $container->get(SuiteCollectionTransformer::class);
+            assert($transformer instanceof SuiteCollectionTransformer);
+            return new PerfidiousGenerator($transformer);
+        }, [ReportExtension::TAG_REPORT_GENERATOR => ['name' => 'perfidious']]);
     }
 }

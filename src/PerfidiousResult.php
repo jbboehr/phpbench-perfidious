@@ -23,20 +23,29 @@ use PhpBench\Model\ResultInterface;
 
 class PerfidiousResult implements ResultInterface
 {
+    /**
+     * @var array<string, int> $values
+     */
+    public readonly array $values;
+
+    /**
+     * @param array<string, int> $values
+     */
     public function __construct(
-        public readonly string $eventName,
-        public readonly int $count,
         public readonly int $timeRunning,
         public readonly int $timeEnabled,
         public readonly int $revolutions,
+        array $values,
     ) {
-        if ($count < 0) {
-            throw new InvalidArgumentException(sprintf('Count cannot be less than zero, got "%s"', $count));
-        }
-
         if ($this->revolutions < 1) {
             throw new InvalidArgumentException(sprintf('Revs cannot be less than zero, got "%s"', $revolutions));
         }
+
+        $arr = [];
+        foreach ($values as $key => $value) {
+            $arr[self::sanitizeEventName($key)] = $value;
+        }
+        $this->values = $arr;
     }
 
     /**
@@ -44,41 +53,48 @@ class PerfidiousResult implements ResultInterface
      */
     public static function fromArray(array $values): ResultInterface
     {
-        $eventName = $values['eventName'] ?? throw new InvalidArgumentException();
-        $count = $values['count'] ?? throw new InvalidArgumentException();
         $timeRunning = $values['timeRunning'] ?? throw new InvalidArgumentException();
         $timeEnabled = $values['timeEnabled'] ?? throw new InvalidArgumentException();
         $revolutions = $values['revolutions'] ?? throw new InvalidArgumentException();
 
-        assert(is_string($eventName));
-        assert(is_integer($count));
-        assert(is_integer($timeRunning));
-        assert(is_integer($timeEnabled));
-        assert(is_integer($revolutions));
+        assert(is_numeric($timeRunning));
+        assert(is_numeric($timeEnabled));
+        assert(is_numeric($revolutions));
+
+        $arr = [];
+
+        foreach ($values as $key => $value) {
+            if (!in_array($key, ['timeRunning', 'timeEnabled', 'revolutions']) && is_numeric($value)) {
+                $arr[$key] = (int) $value;
+            }
+        }
 
         return new self(
-            eventName: $eventName,
-            count: $count,
-            timeRunning: $timeRunning,
-            timeEnabled: $timeEnabled,
-            revolutions: $revolutions,
+            timeRunning: (int) $timeRunning,
+            timeEnabled: (int) $timeEnabled,
+            revolutions: (int) $revolutions,
+            values: $arr,
         );
     }
 
     public function getMetrics(): array
     {
-        return [
-            // @TODO fixme
-            // 'eventName' => $this->eventName,
-            'count' => $this->count,
+        return array_merge([
             'timeRunning' => $this->timeRunning,
             'timeEnabled' => $this->timeEnabled,
             'revolutions' => $this->revolutions,
-        ];
+        ], $this->values);
     }
 
     public function getKey(): string
     {
-        return 'perfidious_' . preg_replace('~[^\w\d]+~', '_', $this->eventName);
+        return 'perfidious';
+    }
+
+    private static function sanitizeEventName(string $eventName): string
+    {
+        $eventName = preg_replace('/[^\w\d]+/', '-', $eventName);
+        assert(is_string($eventName));
+        return trim($eventName, '-');
     }
 }

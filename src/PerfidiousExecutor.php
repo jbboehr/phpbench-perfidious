@@ -118,16 +118,15 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
 
         $results = [];
 
-        // @TODO only one result per class is allowed - lame as fuck
-        foreach ($rr->values as $eventName => $count) {
-            $results[] = new PerfidiousResult(
-                eventName: $eventName,
-                count: $count,
-                timeRunning: $rr->timeRunning,
-                timeEnabled: $rr->timeEnabled,
-                revolutions: $context->getRevolutions(),
-            );
+        $results[] = new PerfidiousResult(
+            timeRunning: $rr->timeRunning,
+            timeEnabled: $rr->timeEnabled,
+            revolutions: $context->getRevolutions(),
+            values: $rr->values,
+        );
 
+        // Add a time result if available
+        foreach ($rr->values as $eventName => $count) {
             if (true === (self::TIME_EVENTS[$eventName] ?? false)) {
                 $adjusted = $count * $rr->timeEnabled / $rr->timeRunning / 1e3;
                 $results[] = new TimeResult((int) $adjusted, $context->getRevolutions());
