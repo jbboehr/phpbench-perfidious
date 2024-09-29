@@ -92,6 +92,10 @@ jobs:
             - name: Run test suite
               run: php vendor/bin/phpunit --no-coverage
 
+# oh yeah, I forgot it doesn't work in Github Actions ... FML
+#            - name: Run benchmarks
+#              run: php vendor/bin/phpbench run
+
     coverage:
         runs-on: ubuntu-latest
         name: "Coverage | PHP ${{ matrix.php-version }}"

@@ -50,7 +50,7 @@ class PerfidiousResult implements ResultInterface
 
         foreach ($rawValues as $key => $value) {
             $key = self::sanitizeEventName($key);
-            $values[$key . '_orig'] = $value;
+            $values[$key . '_raw'] = $value;
             $values[$key] = $value * $timeEnabled / $timeRunning / $revolutions;
         }
 

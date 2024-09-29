@@ -8,8 +8,18 @@
         "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
     ],
     "report.generators": {
+        "all": {
+            "generator": "composite",
+            "reports": [ "default", "perfidious", "aggregate", "env" ]
+        },
         "perfidious": {
             "generator": "perfidious"
         }
-    }
+    },
+    "perfidious.metrics": [
+        "perf::PERF_COUNT_SW_CPU_CLOCK",
+        "perf::PERF_COUNT_HW_INSTRUCTIONS",
+        "perf::PERF_COUNT_SW_PAGE_FAULTS",
+        "perf::PERF_COUNT_SW_CONTEXT_SWITCHES"
+    ]
 }

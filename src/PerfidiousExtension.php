@@ -20,6 +20,7 @@ namespace jbboehr\PhpBenchPerfidious;
 
 use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
 use jbboehr\PhpBenchPerfidious\Progress\VariantSummaryFormatter;
+use jbboehr\PhpBenchPerfidious\Report\PerfidiousGenerator;
 use PhpBench\Assertion\ParameterProvider;
 use PhpBench\DependencyInjection\Container;
 use PhpBench\DependencyInjection\ExtensionInterface;
@@ -29,6 +30,7 @@ use PhpBench\Executor\Method\LocalMethodExecutor;
 use PhpBench\Expression\ExpressionLanguage;
 use PhpBench\Expression\Printer\EvaluatingPrinter;
 use PhpBench\Extension\ConsoleExtension;
+use PhpBench\Extension\ReportExtension;
 use PhpBench\Extension\RunnerExtension;
 use PhpBench\Util\TimeUnit;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -38,10 +40,12 @@ class PerfidiousExtension implements ExtensionInterface
 {
     final public const PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT = 'perfidious.progress_summary_baseline_format';
     final public const PARAM_PROGRESS_SUMMARY_FORMAT = 'perfidious.progress_summary_variant_format';
+    final public const PARAM_PERFIDIOUS_METRICS = 'perfidious.metrics';
 
     public function configure(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
+            self::PARAM_PERFIDIOUS_METRICS => PerfidiousExecutor::DEFAULT_METRICS,
             self::PARAM_PROGRESS_SUMMARY_FORMAT => VariantSummaryFormatter::DEFAULT_FORMAT,
             self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT => VariantSummaryFormatter::BASELINE_FORMAT,
         ]);
@@ -66,8 +70,16 @@ class PerfidiousExtension implements ExtensionInterface
             $bootstrap = $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP);
             assert(is_string($bootstrap) || is_null($bootstrap));
 
+            $metrics = $container->getParameter(self::PARAM_PERFIDIOUS_METRICS);
+            assert(is_array($metrics));
+            $metrics = array_values(array_map(function ($metric): string {
+                assert(is_string($metric));
+                return $metric;
+            }, $metrics));
+
             return new PerfidiousExecutor(
-                $bootstrap,
+                bootstrap: $bootstrap,
+                metrics: $metrics,
             );
         });
 
@@ -89,6 +101,14 @@ class PerfidiousExtension implements ExtensionInterface
             );
         }, [
             RunnerExtension::TAG_PROGRESS_LOGGER => [
+                'name' => 'perfidious',
+            ]
+        ]);
+
+        $container->register(PerfidiousGenerator::class, function (Container $container) {
+            return new PerfidiousGenerator();
+        }, [
+            ReportExtension::TAG_REPORT_GENERATOR => [
                 'name' => 'perfidious',
             ]
         ]);

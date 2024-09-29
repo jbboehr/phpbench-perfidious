@@ -30,7 +30,7 @@ use function Perfidious\open;
 
 class PerfidiousExecutor implements BenchmarkExecutorInterface
 {
-    private const DEFAULT_METRICS = [
+    public const DEFAULT_METRICS = [
         'perf::PERF_COUNT_SW_CPU_CLOCK',
         'perf::PERF_COUNT_HW_INSTRUCTIONS',
     ];
