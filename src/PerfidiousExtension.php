@@ -18,21 +18,33 @@
 
 namespace jbboehr\PhpBenchPerfidious;
 
+use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
+use jbboehr\PhpBenchPerfidious\Progress\VariantSummaryFormatter;
+use PhpBench\Assertion\ParameterProvider;
 use PhpBench\DependencyInjection\Container;
 use PhpBench\DependencyInjection\ExtensionInterface;
 use PhpBench\Executor\CompositeExecutor;
 use PhpBench\Executor\Method\ErrorHandlingExecutorDecorator;
 use PhpBench\Executor\Method\LocalMethodExecutor;
-use PhpBench\Extension\ReportExtension;
+use PhpBench\Expression\ExpressionLanguage;
+use PhpBench\Expression\Printer\EvaluatingPrinter;
+use PhpBench\Extension\ConsoleExtension;
 use PhpBench\Extension\RunnerExtension;
-use PhpBench\Report\Generator\BareGenerator;
-use PhpBench\Report\Transform\SuiteCollectionTransformer;
+use PhpBench\Util\TimeUnit;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PerfidiousExtension implements ExtensionInterface
 {
+    final public const PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT = 'perfidious.progress_summary_baseline_format';
+    final public const PARAM_PROGRESS_SUMMARY_FORMAT = 'perfidious.progress_summary_variant_format';
+
     public function configure(OptionsResolver $resolver): void
     {
+        $resolver->setDefaults([
+            self::PARAM_PROGRESS_SUMMARY_FORMAT => VariantSummaryFormatter::DEFAULT_FORMAT,
+            self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT => VariantSummaryFormatter::BASELINE_FORMAT,
+        ]);
     }
 
     public function load(Container $container): void
@@ -59,10 +71,46 @@ class PerfidiousExtension implements ExtensionInterface
             );
         });
 
-        $container->register(PerfidiousGenerator::class, static function (Container $container): PerfidiousGenerator {
-            $transformer = $container->get(SuiteCollectionTransformer::class);
-            assert($transformer instanceof SuiteCollectionTransformer);
-            return new PerfidiousGenerator($transformer);
-        }, [ReportExtension::TAG_REPORT_GENERATOR => ['name' => 'perfidious']]);
+        $container->register(VariantSummaryFormatter::class, static function (Container $container): VariantSummaryFormatter {
+            return new VariantSummaryFormatter(
+                self::get($container, ExpressionLanguage::class),
+                self::get($container, EvaluatingPrinter::class),
+                self::get($container, ParameterProvider::class),
+                self::getParameterString($container, self::PARAM_PROGRESS_SUMMARY_FORMAT),
+                self::getParameterString($container, self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT)
+            );
+        });
+
+        $container->register(PerfidiousProgressLogger::class, static function (Container $container): PerfidiousProgressLogger {
+            return new PerfidiousProgressLogger(
+                self::get($container, OutputInterface::class, ConsoleExtension::SERVICE_OUTPUT_ERR),
+                self::get($container, VariantSummaryFormatter::class),
+                self::get($container, TimeUnit::class)
+            );
+        }, [
+            RunnerExtension::TAG_PROGRESS_LOGGER => [
+                'name' => 'perfidious',
+            ]
+        ]);
+    }
+
+    /**
+     * @template T of object
+     * @param Container $container
+     * @param class-string<T> $class
+     * @return T
+     */
+    private static function get(Container $container, string $class, ?string $key = null): object
+    {
+        $object = $container->get($key ?? $class);
+        assert(is_object($object) && is_a($object, $class, true));
+        return $object;
+    }
+
+    private static function getParameterString(Container $container, string $name): string
+    {
+        $param = $container->getParameter($name);
+        assert(is_string($param));
+        return $param;
     }
 }

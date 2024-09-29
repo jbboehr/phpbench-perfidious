@@ -118,11 +118,11 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
 
         $results = [];
 
-        $results[] = new PerfidiousResult(
+        $results[] = PerfidiousResult::create(
             timeRunning: $rr->timeRunning,
             timeEnabled: $rr->timeEnabled,
             revolutions: $context->getRevolutions(),
-            values: $rr->values,
+            rawValues: $rr->values,
         );
 
         // Add a time result if available

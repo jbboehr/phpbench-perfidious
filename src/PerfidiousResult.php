@@ -24,28 +24,42 @@ use PhpBench\Model\ResultInterface;
 class PerfidiousResult implements ResultInterface
 {
     /**
-     * @var array<string, int> $values
-     */
-    public readonly array $values;
-
-    /**
-     * @param array<string, int> $values
+     * @param array<string, int|float> $values
      */
     public function __construct(
         public readonly int $timeRunning,
         public readonly int $timeEnabled,
         public readonly int $revolutions,
-        array $values,
+        public readonly array $values,
     ) {
         if ($this->revolutions < 1) {
             throw new InvalidArgumentException(sprintf('Revs cannot be less than zero, got "%s"', $revolutions));
         }
+    }
 
-        $arr = [];
-        foreach ($values as $key => $value) {
-            $arr[self::sanitizeEventName($key)] = $value;
+    /**
+     * @param array<string, int|float> $rawValues
+     */
+    public static function create(
+        int $timeRunning,
+        int $timeEnabled,
+        int $revolutions,
+        array $rawValues,
+    ): self {
+        $values = [];
+
+        foreach ($rawValues as $key => $value) {
+            $key = self::sanitizeEventName($key);
+            $values[$key . '_orig'] = $value;
+            $values[$key] = $value * $timeEnabled / $timeRunning;
         }
-        $this->values = $arr;
+
+        return new self(
+            timeRunning: $timeRunning,
+            timeEnabled: $timeEnabled,
+            revolutions: $revolutions,
+            values: $values,
+        );
     }
 
     /**
@@ -66,6 +80,12 @@ class PerfidiousResult implements ResultInterface
         foreach ($values as $key => $value) {
             if (!in_array($key, ['timeRunning', 'timeEnabled', 'revolutions']) && is_numeric($value)) {
                 $arr[$key] = (int) $value;
+            } elseif (is_string($value)) {
+                if (str_contains($value, '.')) {
+                    $arr[$key] = (float) $value;
+                } else {
+                    $arr[$key] = (int) $value;
+                }
             }
         }
 
@@ -93,6 +113,7 @@ class PerfidiousResult implements ResultInterface
 
     private static function sanitizeEventName(string $eventName): string
     {
+        $eventName = str_replace('::', '__', $eventName);
         $eventName = preg_replace('/[^\w\d]+/', '-', $eventName);
         assert(is_string($eventName));
         return trim($eventName, '-');

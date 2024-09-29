@@ -3,7 +3,13 @@
     "runner.bootstrap": "vendor/autoload.php",
     "runner.path": "tests/Benchmark",
     "runner.executor": "perfidious",
+    "runner.progress": "perfidious",
     "core.extensions": [
         "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
-    ]
+    ],
+    "report.generators": {
+        "perfidious": {
+            "generator": "perfidious"
+        }
+    }
 }
