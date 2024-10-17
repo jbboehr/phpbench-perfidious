@@ -18,6 +18,7 @@
 
 namespace jbboehr\PhpBenchPerfidious;
 
+use jbboehr\PhpBenchPerfidious\Executor\PerfidiousRemoteExecutor;
 use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
 use jbboehr\PhpBenchPerfidious\Progress\VariantSummaryFormatter;
 use jbboehr\PhpBenchPerfidious\Report\PerfidiousGenerator;
@@ -80,6 +81,25 @@ class PerfidiousExtension implements ExtensionInterface
             return new PerfidiousExecutor(
                 bootstrap: $bootstrap,
                 metrics: $metrics,
+            );
+        });
+
+        $container->register(PerfidiousRemoteExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
+            $executor = $container->get(PerfidiousRemoteExecutor::class);
+            assert($executor instanceof PerfidiousRemoteExecutor);
+
+            $local_method_exectuor = $container->get(LocalMethodExecutor::class);
+            assert($local_method_exectuor instanceof LocalMethodExecutor);
+
+            return new CompositeExecutor(
+                $executor,
+                new ErrorHandlingExecutorDecorator($local_method_exectuor),
+            );
+        }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-remote']]);
+
+        $container->register(PerfidiousRemoteExecutor::class, static function (Container $container): PerfidiousRemoteExecutor {
+            return new PerfidiousRemoteExecutor(
+                bootstrap: $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP),
             );
         });
 
