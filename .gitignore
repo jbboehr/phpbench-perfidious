@@ -9,3 +9,4 @@ result*
 /.pre-commit-config.yaml
 /coverage/
 /vendor/
+/tmp/

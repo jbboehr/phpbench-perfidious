@@ -12,5 +12,10 @@ parameters:
     stubFiles:
         - stubs/perfidious.stub.php
     strictRules:
-        disallowedConstructs: false
-        strictCalls: false
+        disallowedBacktick: false
+        disallowedEmpty: false
+        disallowedImplicitArrayCreation: false
+        disallowedShortTernary: false
+        dynamicCallOnStaticMethod: false
+        strictFunctionCalls: false
+        illegalConstructorMethodCall: false

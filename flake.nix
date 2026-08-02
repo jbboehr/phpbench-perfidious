@@ -16,8 +16,11 @@
   description = "jbboehr/phpbench-perfidious";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    nix-phps = {
+      url = "github:fossar/nix-phps";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     systems.url = "github:nix-systems/default-linux";
     flake-utils = {
       url = "github:numtide/flake-utils";
@@ -34,9 +37,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     perfidious = {
-      url = "github:jbboehr/php-perf";
+      url = "github:jbboehr/php-perfidious";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.nixpkgs-unstable.follows = "nixpkgs-unstable";
       inputs.systems.follows = "systems";
       inputs.flake-utils.follows = "flake-utils";
     };
@@ -45,7 +47,7 @@
   outputs = {
     self,
     nixpkgs,
-    nixpkgs-unstable,
+    nix-phps,
     systems,
     flake-utils,
     pre-commit-hooks,
@@ -54,7 +56,7 @@
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
-      pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
+      php-phps = nix-phps.packages.${system};
       inherit (pkgs) lib;
 
       src = gitignore.lib.gitignoreSource ./.;
@@ -111,7 +113,7 @@
 
       devShells = rec {
         php81 = makeShell {
-          php = pkgs.php81;
+          php = php-phps.php81;
           perfidious = perfidious.packages.${system}.php81-gcc;
         };
         php82 = makeShell {
@@ -123,11 +125,14 @@
           perfidious = perfidious.packages.${system}.php83-gcc;
         };
         php84 = makeShell {
-          php = pkgs-unstable.php84;
+          php = pkgs.php84;
           perfidious = perfidious.packages.${system}.php84-gcc;
-          withPcov = false;
         };
-        default = php81;
+        php85 = makeShell {
+          php = pkgs.php85;
+          perfidious = perfidious.packages.${system}.php85-gcc;
+        };
+        default = php82;
       };
 
       formatter = pkgs.alejandra;
