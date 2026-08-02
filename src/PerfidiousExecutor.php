@@ -22,7 +22,8 @@
 
 namespace jbboehr\PhpBenchPerfidious;
 
-use Perfidious\Handle;
+use jbboehr\PhpBenchPerfidious\Perf\HandleInterface;
+use jbboehr\PhpBenchPerfidious\Perf\NativeHandle;
 use PhpBench\Executor\BenchmarkExecutorInterface;
 use PhpBench\Executor\Exception\ExecutionError;
 use PhpBench\Executor\ExecutionContext;
@@ -30,8 +31,6 @@ use PhpBench\Executor\ExecutionResults;
 use PhpBench\Model\Result\TimeResult;
 use PhpBench\Registry\Config;
 use Symfony\Component\OptionsResolver\OptionsResolver;
-
-use function Perfidious\open;
 
 class PerfidiousExecutor implements BenchmarkExecutorInterface
 {
@@ -47,21 +46,25 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
         'perf::TASK-CLOCK' => true,
     ];
 
-    /** @var list<string>  */
-    private array $metrics;
-
-    /** @var Handle<list<string>> */
-    private Handle $handle;
+    public function __construct(
+        private readonly HandleInterface $handle,
+        private readonly ?string $bootstrap = null,
+    ) {
+    }
 
     /**
+     * Convenience constructor for the common case: opens a real perf handle
+     * for the given metrics (or DEFAULT_METRICS). Most callers want this;
+     * the primary constructor exists so tests can inject a fake HandleInterface.
+     *
      * @param ?list<string> $metrics
      */
-    public function __construct(
-        private readonly ?string $bootstrap = null,
-        ?array $metrics = null,
-    ) {
-        $this->metrics = $metrics ?? self::DEFAULT_METRICS;
-        $this->handle = open($this->metrics);
+    public static function withMetrics(?array $metrics = null, ?string $bootstrap = null): self
+    {
+        return new self(
+            handle: new NativeHandle($metrics ?? self::DEFAULT_METRICS),
+            bootstrap: $bootstrap,
+        );
     }
 
     public function configure(OptionsResolver $options): void

@@ -84,9 +84,9 @@ class PerfidiousExtension implements ExtensionInterface
                 return $metric;
             }, $metrics));
 
-            return new PerfidiousExecutor(
-                bootstrap: $bootstrap,
+            return PerfidiousExecutor::withMetrics(
                 metrics: $metrics,
+                bootstrap: $bootstrap,
             );
         });
 

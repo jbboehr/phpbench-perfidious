@@ -25,6 +25,7 @@ namespace jbboehr\PhpBenchPerfidious\Tests;
 use jbboehr\PhpBenchPerfidious\PerfidiousExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark;
+use jbboehr\PhpBenchPerfidious\Tests\Fixtures\FakeHandle;
 use PhpBench\Executor\ExecutionContext;
 use PhpBench\Executor\Exception\ExecutionError;
 use PhpBench\Model\Result\TimeResult;
@@ -42,7 +43,7 @@ class PerfidiousExecutorTest extends TestCase
     {
         // Software-only metric: reliable in sandboxed/virtualized CI environments
         // where hardware PMU counters are not available.
-        return new PerfidiousExecutor(metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK']);
+        return PerfidiousExecutor::withMetrics(metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK']);
     }
 
     /**
@@ -93,7 +94,7 @@ class PerfidiousExecutorTest extends TestCase
 
     public function testTimeResultIsNotAddedWhenNoMetricIsARecognizedTimeEvent(): void
     {
-        $executor = new PerfidiousExecutor(metrics: ['perf::PERF_COUNT_SW_PAGE_FAULTS']);
+        $executor = PerfidiousExecutor::withMetrics(metrics: ['perf::PERF_COUNT_SW_PAGE_FAULTS']);
 
         $results = $executor->execute($this->makeContext('passes'), new Config('test', []));
 
@@ -225,5 +226,60 @@ class PerfidiousExecutorTest extends TestCase
         $this->expectNotToPerformAssertions();
 
         PerfidiousExecutor::assertCountersRan(1);
+    }
+
+    public function testHandleLifecycleCallOrder(): void
+    {
+        $handle = new FakeHandle(values: ['perf::PERF_COUNT_SW_CPU_CLOCK' => 5_000_000]);
+        $executor = new PerfidiousExecutor($handle);
+
+        $executor->execute($this->makeContext('passes', 3), new Config('test', []));
+
+        // reset() then enable() must bracket the timed loop *before* it runs,
+        // disable() then read() must bracket it *after* -- this is the call
+        // order/count that was previously impossible to verify without
+        // mocking the final Perfidious\Handle class.
+        $this->assertSame(['reset', 'enable', 'disable', 'read'], $handle->calls);
+    }
+
+    public function testTimeRunningZeroFromHandleIsWrappedAsExecutionError(): void
+    {
+        $handle = new FakeHandle(timeRunning: 0, timeEnabled: 0);
+        $executor = new PerfidiousExecutor($handle);
+
+        $this->expectException(ExecutionError::class);
+
+        $executor->execute($this->makeContext('passes'), new Config('test', []));
+    }
+
+    public function testExecuteComputesExactValuesFromControlledHandleData(): void
+    {
+        $timeEnabled = 1_000_000;
+        $timeRunning = 1_000_000;
+        $count = 5_000_000;
+        $revolutions = 10;
+
+        $handle = new FakeHandle(
+            timeRunning: $timeRunning,
+            timeEnabled: $timeEnabled,
+            values: ['perf::PERF_COUNT_SW_CPU_CLOCK' => $count],
+        );
+        $executor = new PerfidiousExecutor($handle);
+
+        $results = $executor->execute($this->makeContext('passes', $revolutions), new Config('test', []));
+
+        $perfResult = $results->byType(PerfidiousResult::class)->first();
+        $this->assertInstanceOf(PerfidiousResult::class, $perfResult);
+        $this->assertSame(
+            $count * $timeEnabled / $timeRunning / $revolutions,
+            $perfResult->values['perf__PERF_COUNT_SW_CPU_CLOCK'],
+        );
+
+        $timeResult = $results->byType(TimeResult::class)->first();
+        $this->assertInstanceOf(TimeResult::class, $timeResult);
+        $this->assertSame(
+            PerfidiousExecutor::adjustedTime($count, $timeEnabled, $timeRunning),
+            $timeResult->getNet(),
+        );
     }
 }
