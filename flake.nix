@@ -34,6 +34,10 @@
       url = "github:hercules-ci/gitignore.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-github-actions = {
+      url = "github:nix-community/nix-github-actions";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     perfidious = {
       url = "github:jbboehr/php-perfidious";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -50,9 +54,10 @@
     flake-utils,
     pre-commit-hooks,
     gitignore,
+    nix-github-actions,
     perfidious,
   }:
-    flake-utils.lib.eachDefaultSystem (system: let
+    (flake-utils.lib.eachDefaultSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
       php-phps = nix-phps.packages.${system};
       inherit (pkgs) lib;
@@ -190,5 +195,11 @@
       };
 
       formatter = pkgs.alejandra;
-    });
+    }))
+    // {
+      githubActions = nix-github-actions.lib.mkGithubMatrix {
+        checks = {inherit (self.checks) x86_64-linux;};
+        attrPrefix = "checks";
+      };
+    };
 }
