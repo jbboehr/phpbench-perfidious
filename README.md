@@ -9,6 +9,8 @@ It provides:
 
 - a benchmark **executor** (`perfidious`) that wraps each variant's revolutions in a `perf_event_open` handle and
   attaches the counter values as an extra result alongside the normal time/memory results;
+- a second **executor** (`perfidious-remote`) that does the same thing but in an isolated subprocess per variant,
+  like PHPBench's own built-in `remote` executor — see [Remote execution](#remote-execution) below;
 - a **progress logger** (`perfidious`) that adds an instructions-per-iteration summary to PHPBench's verbose progress
   output;
 - a **report generator** (`perfidious`) that renders the raw and per-revolution-normalized counter values in a table.
@@ -93,6 +95,35 @@ rows omitted for brevity — every configured metric gets its own column, normal
 Each metric column is normalized per revolution (`raw_count * timeEnabled / timeRunning / revolutions`); the
 unnormalized raw counter total for a metric is also available under a `<metric>_raw` key, which the default
 `perfidious` report generator omits for readability.
+
+## Remote execution
+
+The default `perfidious` executor runs every benchmark iteration, across every subject in the whole
+`phpbench run`, inside a single long-lived PHP process — there's no isolation between benchmarks (opcache/JIT
+warmup and memory state carry over from one subject to the next).
+
+`perfidious-remote` runs each variant in its own freshly spawned subprocess instead — the same approach PHPBench's
+own built-in `remote` executor uses — while still collecting perf counters (each subprocess opens its own handle).
+This is opt-in; it isn't PHPBench's builtin default, and this repo's own `phpbench.json` doesn't default to it
+either. Select it with a CLI flag:
+
+```shell
+phpbench run --executor=perfidious-remote --report=perfidious
+```
+
+or by setting `"runner.executor": "perfidious-remote"` in your own `phpbench.json`. It uses the same
+`perfidious.metrics` configuration key as the in-process executor.
+
+Trade-offs versus `perfidious`:
+
+- adds a real `MemoryResult` (memory usage per variant) — meaningless for the in-process executor, since memory
+  would accumulate across every subject in the run, but meaningful here since each variant gets a fresh process;
+- has subprocess-spawn overhead per variant, so wall-clock-sensitive comparisons against `perfidious` aren't
+  apples-to-apples;
+- like the in-process executor, only produces a `TimeResult` if `perfidious.metrics` includes a recognized
+  time-counter event (e.g. the default `perf::PERF_COUNT_SW_CPU_CLOCK`) — if you configure only, say,
+  `perf::PERF_COUNT_HW_INSTRUCTIONS`, no `TimeResult` is emitted and PHPBench's built-in stats/aggregate reporting
+  won't have timing data to work with.
 
 ## License
 

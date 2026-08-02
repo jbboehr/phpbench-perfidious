@@ -22,6 +22,7 @@
 
 namespace jbboehr\PhpBenchPerfidious;
 
+use jbboehr\PhpBenchPerfidious\Executor\PerfidiousRemoteExecutor;
 use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
 use jbboehr\PhpBenchPerfidious\Progress\VariantSummaryFormatter;
 use jbboehr\PhpBenchPerfidious\Report\PerfidiousGenerator;
@@ -31,11 +32,13 @@ use PhpBench\DependencyInjection\ExtensionInterface;
 use PhpBench\Executor\CompositeExecutor;
 use PhpBench\Executor\Method\ErrorHandlingExecutorDecorator;
 use PhpBench\Executor\Method\LocalMethodExecutor;
+use PhpBench\Executor\Method\RemoteMethodExecutor;
 use PhpBench\Expression\ExpressionLanguage;
 use PhpBench\Expression\Printer\EvaluatingPrinter;
 use PhpBench\Extension\ConsoleExtension;
 use PhpBench\Extension\ReportExtension;
 use PhpBench\Extension\RunnerExtension;
+use PhpBench\Remote\Launcher;
 use PhpBench\Util\TimeUnit;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -83,6 +86,36 @@ class PerfidiousExtension implements ExtensionInterface
 
             return new PerfidiousExecutor(
                 bootstrap: $bootstrap,
+                metrics: $metrics,
+            );
+        });
+
+        $container->register(PerfidiousRemoteExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
+            $executor = $container->get(PerfidiousRemoteExecutor::class);
+            assert($executor instanceof PerfidiousRemoteExecutor);
+
+            $remoteMethodExecutor = $container->get(RemoteMethodExecutor::class);
+            assert($remoteMethodExecutor instanceof RemoteMethodExecutor);
+
+            return new CompositeExecutor(
+                $executor,
+                new ErrorHandlingExecutorDecorator($remoteMethodExecutor),
+            );
+        }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-remote']]);
+
+        $container->register(PerfidiousRemoteExecutor::class, static function (Container $container): PerfidiousRemoteExecutor {
+            $launcher = $container->get(Launcher::class);
+            assert($launcher instanceof Launcher);
+
+            $metrics = $container->getParameter(self::PARAM_PERFIDIOUS_METRICS);
+            assert(is_array($metrics));
+            $metrics = array_values(array_map(function ($metric): string {
+                assert(is_string($metric));
+                return $metric;
+            }, $metrics));
+
+            return new PerfidiousRemoteExecutor(
+                launcher: $launcher,
                 metrics: $metrics,
             );
         });

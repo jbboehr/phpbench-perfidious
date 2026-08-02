@@ -40,7 +40,7 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
         'perf::PERF_COUNT_HW_INSTRUCTIONS',
     ];
 
-    private const TIME_EVENTS = [
+    public const TIME_EVENTS = [
         'perf::PERF_COUNT_SW_CPU_CLOCK' => true,
         'perf::CPU-CLOCK' => true,
         'perf::PERF_COUNT_SW_TASK_CLOCK' => true,

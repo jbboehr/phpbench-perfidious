@@ -41,4 +41,29 @@ class ExecutorFixtureBenchmark
     {
         throw new \Error('deliberate error from benchmark');
     }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    public function recordsBeforeMarker(array $parameters): void
+    {
+        $marker = $parameters['marker'];
+        assert(is_string($marker));
+        file_put_contents($marker . '.before', '1');
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    public function recordsAfterMarker(array $parameters): void
+    {
+        $marker = $parameters['marker'];
+        assert(is_string($marker));
+        file_put_contents($marker . '.after', '1');
+    }
+
+    public function echoesOutput(): void
+    {
+        echo 'unexpected output';
+    }
 }
