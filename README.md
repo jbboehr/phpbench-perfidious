@@ -80,6 +80,11 @@ context — set them to wherever your own bootstrap file and benchmark classes l
   unit. They are commonly unavailable in containers and nested/cloud CI runners — prefer the `perf::PERF_COUNT_SW_*`
   software events there.
 
+GitHub-hosted runners do not expose the hardware PMU events used by this repository's normal configuration. The
+end-to-end CI test therefore uses a dedicated `perfidious-remote-ci` profile limited to
+`perf::PERF_COUNT_SW_CPU_CLOCK`. CI verifies executor integration and software counting only; hardware events must be
+validated on a PMU-enabled host.
+
 Then run PHPBench and request the `perfidious` report, e.g. `phpbench run --report=perfidious`. Here's real output
 from running this repo's own `phpbench.json` (shown above) against its `tests/Benchmark/SieveBench` fixture, with
 rows omitted for brevity — every configured metric gets its own column, normalized per revolution:

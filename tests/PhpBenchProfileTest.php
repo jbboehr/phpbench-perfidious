@@ -27,14 +27,14 @@ use Symfony\Component\Process\Process;
 
 final class PhpBenchProfileTest extends TestCase
 {
-    public function testRemoteProfileSelectsRemoteExecutor(): void
+    public function testCiRemoteProfileUsesPortableSoftwareCounter(): void
     {
         $root = dirname(__DIR__);
         $process = new Process([
             PHP_BINARY,
             $root . '/vendor/bin/phpbench',
             'run',
-            '--profile=perfidious-remote',
+            '--profile=perfidious-remote-ci',
             '--iterations=1',
             '--revs=1',
             '--warmup=1',
@@ -51,5 +51,7 @@ final class PhpBenchProfileTest extends TestCase
             '<result key="mem" class="PhpBench\\Model\\Result\\MemoryResult"/>',
             $process->getOutput(),
         );
+        self::assertStringContainsString('perfidious-perf--PERF-COUNT-SW-CPU-CLOCK=', $process->getOutput());
+        self::assertStringNotContainsString('PERF-COUNT-HW-INSTRUCTIONS', $process->getOutput());
     }
 }

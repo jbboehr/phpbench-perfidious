@@ -7,6 +7,12 @@
     "core.profiles": {
         "perfidious-remote": {
             "runner.executor": "perfidious-remote"
+        },
+        "perfidious-remote-ci": {
+            "runner.executor": "perfidious-remote",
+            "perfidious.metrics": [
+                "perf::PERF_COUNT_SW_CPU_CLOCK"
+            ]
         }
     },
     "core.extensions": [
