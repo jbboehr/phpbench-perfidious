@@ -69,6 +69,9 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
             'metrics' => var_export($this->metrics, true),
         ]);
 
+        // @infection-ignore-all Payload::replaceTokens() passes this array straight
+        // into str_replace()'s $replace parameter, which PHP coerces to string
+        // per-element regardless -- removing this map/cast is behavior-equivalent.
         return array_map(function (mixed $value): string {
             assert(is_scalar($value));
             return (string) $value;
@@ -161,9 +164,7 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
             $rawValues[$eventName] = $count;
         }
 
-        if ($timeRunning <= 0) {
-            throw new \RuntimeException('perf_events failed to run');
-        }
+        PerfidiousExecutor::assertCountersRan($timeRunning);
 
         $results = [
             MemoryResult::fromArray($mem),
@@ -179,8 +180,8 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
         // rather than the wall-clock time PHPBench's stock remote executors use.
         foreach ($rawValues as $eventName => $count) {
             if (true === (PerfidiousExecutor::TIME_EVENTS[$eventName] ?? false)) {
-                $adjusted = $count * $timeEnabled / $timeRunning / 1e3;
-                $results[] = new TimeResult((int) $adjusted, $context->getRevolutions());
+                $adjusted = PerfidiousExecutor::adjustedTime($count, $timeEnabled, $timeRunning);
+                $results[] = new TimeResult($adjusted, $context->getRevolutions());
                 break;
             }
         }

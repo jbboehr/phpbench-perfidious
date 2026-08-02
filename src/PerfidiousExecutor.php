@@ -68,6 +68,30 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
     {
     }
 
+    /**
+     * Converts a raw perf counter value that represents elapsed time into
+     * microseconds, adjusted for multiplexing (timeEnabled/timeRunning) the
+     * kernel may have applied when more counters were requested than the
+     * CPU has hardware slots for. Pulled out into a pure function -- shared
+     * with PerfidiousRemoteExecutor -- so it can be unit tested with fixed
+     * inputs instead of relying on real (non-deterministic) perf timings.
+     */
+    public static function adjustedTime(int|float $count, int $timeEnabled, int $timeRunning): int
+    {
+        return (int) ($count * $timeEnabled / $timeRunning / 1e3);
+    }
+
+    /**
+     * @throws \RuntimeException if perf_events never actually ran (a handle
+     *         was read but its timeRunning never advanced)
+     */
+    public static function assertCountersRan(int $timeRunning): void
+    {
+        if ($timeRunning <= 0) {
+            throw new \RuntimeException('perf_events failed to run');
+        }
+    }
+
     public function execute(ExecutionContext $context, Config $config): ExecutionResults
     {
         try {
@@ -117,9 +141,7 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
         $this->handle->disable();
         $rr = $this->handle->read();
 
-        if ($rr->timeRunning <= 0) {
-            throw new \RuntimeException('perf_events failed to run');
-        }
+        self::assertCountersRan($rr->timeRunning);
 
         $results = [];
 
@@ -133,8 +155,8 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
         // Add a time result if available
         foreach ($rr->values as $eventName => $count) {
             if (true === (self::TIME_EVENTS[$eventName] ?? false)) {
-                $adjusted = $count * $rr->timeEnabled / $rr->timeRunning / 1e3;
-                $results[] = new TimeResult((int) $adjusted, $context->getRevolutions());
+                $adjusted = self::adjustedTime($count, $rr->timeEnabled, $rr->timeRunning);
+                $results[] = new TimeResult($adjusted, $context->getRevolutions());
             }
         }
 

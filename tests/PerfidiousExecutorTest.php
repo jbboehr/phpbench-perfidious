@@ -180,4 +180,50 @@ class PerfidiousExecutorTest extends TestCase
 
         $this->assertSame(3, ExecutorFixtureBenchmark::$callCount);
     }
+
+    /**
+     * @dataProvider adjustedTimeProvider
+     */
+    public function testAdjustedTime(int|float $count, int $timeEnabled, int $timeRunning, int $expected): void
+    {
+        $this->assertSame($expected, PerfidiousExecutor::adjustedTime($count, $timeEnabled, $timeRunning));
+    }
+
+    /**
+     * @return iterable<string, array{int|float, int, int, int}>
+     */
+    public static function adjustedTimeProvider(): iterable
+    {
+        // No multiplexing: timeEnabled === timeRunning, count is already in
+        // nanoseconds, /1e3 converts to microseconds.
+        yield 'no multiplexing' => [5_000_000, 1_000_000, 1_000_000, 5_000];
+        // Counter was only actually running half the time it was enabled for
+        // (multiplexed with other counters): the kernel-reported count gets
+        // scaled up by timeEnabled/timeRunning to estimate the true value.
+        yield 'multiplexed at half' => [5_000_000, 1_000_000, 500_000, 10_000];
+        // Float count (as decoded from a remote executor's child process).
+        yield 'float count' => [5_000_000.0, 1_000_000, 1_000_000, 5_000];
+    }
+
+    public function testAssertCountersRanThrowsWhenTimeRunningIsZero(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('perf_events failed to run');
+
+        PerfidiousExecutor::assertCountersRan(0);
+    }
+
+    public function testAssertCountersRanThrowsWhenTimeRunningIsNegative(): void
+    {
+        $this->expectException(\RuntimeException::class);
+
+        PerfidiousExecutor::assertCountersRan(-1);
+    }
+
+    public function testAssertCountersRanDoesNotThrowWhenTimeRunningIsPositive(): void
+    {
+        $this->expectNotToPerformAssertions();
+
+        PerfidiousExecutor::assertCountersRan(1);
+    }
 }

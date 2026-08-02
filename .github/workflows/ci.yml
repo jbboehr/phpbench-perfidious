@@ -170,7 +170,7 @@ jobs:
               run: composer install --prefer-dist --no-progress
 
             - name: Run mutation testing
-              run: php vendor/bin/infection --threads=max --min-msi=65 --no-progress
+              run: php vendor/bin/infection --threads=max --min-msi=70 --no-progress
 
     nix:
         runs-on: ubuntu-latest
