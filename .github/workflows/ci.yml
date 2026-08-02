@@ -51,6 +51,10 @@ jobs:
             - name: Install dependencies
               run: composer install --prefer-dist --no-progress --ignore-platform-req=php+
 
+            - name: Audit dependencies
+              if: matrix.php-version == '8.2'
+              run: composer audit --locked --no-interaction
+
             - name: php-cs-fixer
               run: php vendor/bin/php-cs-fixer fix --dry-run --diff
 
