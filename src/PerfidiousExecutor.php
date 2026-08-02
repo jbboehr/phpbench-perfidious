@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright (c) anno Domini nostri Jesu Christi MMXXIV John Boehr & contributors
  *
@@ -26,6 +27,7 @@ use PhpBench\Executor\ExecutionResults;
 use PhpBench\Model\Result\TimeResult;
 use PhpBench\Registry\Config;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+
 use function Perfidious\open;
 
 class PerfidiousExecutor implements BenchmarkExecutorInterface

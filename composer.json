@@ -22,16 +22,20 @@
         "ext-perfidious": "*"
     },
     "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3",
         "phpstan/phpstan": "^2.0",
         "phpstan/phpstan-phpunit": "^2.0",
         "phpstan/phpstan-strict-rules": "^2.0",
-        "phpunit/phpunit": "^10.5",
-        "squizlabs/php_codesniffer": "^4.0"
+        "phpunit/phpunit": "^10.5"
     },
     "autoload-dev": {
         "psr-4": {
             "jbboehr\\PhpBenchPerfidious\\Tests\\": "tests"
         }
+    },
+    "scripts": {
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix"
     },
     "_comment": [
         "Think not that I am come to send peace on earth: I came not to send peace, but a sword. Matthew 10:34"
