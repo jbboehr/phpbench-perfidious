@@ -59,6 +59,51 @@
 
       src = gitignore.lib.gitignoreSource ./.;
 
+      version = "0.0.0-dev";
+
+      phpVersions = {
+        php81 = {
+          php = php-phps.php81;
+          perfidious = perfidious.packages.${system}.php81-gcc;
+        };
+        php82 = {
+          php = pkgs.php82;
+          perfidious = perfidious.packages.${system}.php82-gcc;
+        };
+        php83 = {
+          php = pkgs.php83;
+          perfidious = perfidious.packages.${system}.php83-gcc;
+        };
+        php84 = {
+          php = pkgs.php84;
+          perfidious = perfidious.packages.${system}.php84-gcc;
+        };
+        php85 = {
+          php = pkgs.php85;
+          perfidious = perfidious.packages.${system}.php85-gcc;
+        };
+      };
+
+      composerVendor = php-phps.php81.mkComposerVendor {
+        pname = "phpbench-perfidious";
+        inherit src version;
+        vendorHash = "sha256-Ptxkv1tGOASLr6Oa5WXPZPHswZcrB/IS+FtN1B5u37o=";
+        composerNoDev = false;
+        composerNoPlugins = true;
+        composerNoScripts = true;
+      };
+
+      nixPackages =
+        lib.mapAttrs
+        (
+          _name: phpVersion:
+            import ./nix/dev-package.nix {
+              inherit lib src version composerVendor;
+              inherit (phpVersion) php perfidious;
+            }
+        )
+        phpVersions;
+
       pre-commit-check = pre-commit-hooks.lib.${system}.run {
         inherit src;
         hooks = {
@@ -105,9 +150,20 @@
           '';
         };
     in rec {
-      checks = {
-        inherit pre-commit-check;
-      };
+      checks =
+        {
+          inherit pre-commit-check;
+        }
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isx86_64 (
+          lib.mapAttrs' (name: value: lib.nameValuePair "test-${name}" value) nixPackages
+        );
+
+      packages = lib.optionalAttrs pkgs.stdenv.hostPlatform.isx86_64 (
+        nixPackages
+        // {
+          default = nixPackages.php82;
+        }
+      );
 
       devShells = rec {
         php81 = makeShell {

@@ -137,6 +137,18 @@ Trade-offs versus `perfidious`:
   `perf::PERF_COUNT_HW_INSTRUCTIONS`, no `TimeResult` is emitted and PHPBench's built-in stats/aggregate reporting
   won't have timing data to work with.
 
+## Nix development packages
+
+The flake exposes development packages for every supported PHP version: `nix build .#php81` through
+`nix build .#php85` (with PHP 8.2 at `.#default`). These outputs intentionally include Composer development
+dependencies and run the PHPUnit suite while building; they are CI and development artifacts, not minimal runtime
+packages.
+
+All five packages reuse one Composer vendor derivation generated with the lowest supported PHP version, PHP 8.1.
+After changing `composer.lock`, temporarily set that derivation's `vendorHash` in `flake.nix` to `lib.fakeHash`, build
+any package, copy the `got: sha256-...` value from Nix's expected hash-mismatch error, replace `lib.fakeHash` with that
+value, and rebuild. No generated Nix files or per-PHP hashes are required.
+
 ## License
 
 phpbench-perfidious is licensed under the **GNU Affero General Public License version 3 with the Romic Exception**:
