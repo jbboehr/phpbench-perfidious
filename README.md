@@ -1,6 +1,74 @@
 
 # phpbench-perfidious
 
+[PHPBench](https://github.com/phpbench/phpbench) extension that measures benchmark iterations with hardware and
+software performance counters (instructions, cycles, cache misses, page faults, context switches, ...) via
+[`ext-perfidious`](https://github.com/jbboehr/php-perfidious), instead of (or alongside) wall-clock time.
+
+It provides:
+
+- a benchmark **executor** (`perfidious`) that wraps each variant's revolutions in a `perf_event_open` handle and
+  attaches the counter values as an extra result alongside the normal time/memory results;
+- a **progress logger** (`perfidious`) that adds an instructions-per-iteration summary to PHPBench's verbose progress
+  output;
+- a **report generator** (`perfidious`) that renders the raw and per-revolution-normalized counter values in a table.
+
+## Installation
+
+```shell
+composer require --dev jbboehr/phpbench-perfidious
+```
+
+This package requires the [`perfidious`](https://github.com/jbboehr/php-perfidious) PHP extension to be installed and
+enabled; it is declared as a `suggest` rather than a hard dependency since PHPBench itself doesn't require it.
+
+## Configuration
+
+Enable the extension and its executor/progress logger/report generator in `phpbench.json`:
+
+```json
+{
+    "runner.executor": "perfidious",
+    "runner.progress": "perfidious",
+    "core.extensions": [
+        "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
+    ],
+    "report.generators": {
+        "perfidious": {
+            "generator": "perfidious"
+        }
+    },
+    "perfidious.metrics": [
+        "perf::PERF_COUNT_SW_CPU_CLOCK",
+        "perf::PERF_COUNT_HW_INSTRUCTIONS",
+        "perf::PERF_COUNT_SW_PAGE_FAULTS",
+        "perf::PERF_COUNT_SW_CONTEXT_SWITCHES"
+    ]
+}
+```
+
+- `perfidious.metrics` accepts any event name understood by `Perfidious\open()` (see the `ext-perfidious` README for
+  the full list, or `phpbench.json`'s own schema for the format). Defaults to
+  `perf::PERF_COUNT_SW_CPU_CLOCK` and `perf::PERF_COUNT_HW_INSTRUCTIONS` if omitted.
+- Hardware counters (anything under `perf::PERF_COUNT_HW_*`) require host access to the CPU's performance-monitoring
+  unit. They are commonly unavailable in containers and nested/cloud CI runners — prefer the `perf::PERF_COUNT_SW_*`
+  software events there.
+
+Then run PHPBench and request the `perfidious` report, e.g. `phpbench run --report=perfidious`:
+
+```text
++------+------------+-------------+------+-------------------------------+----------------------------------+
+| iter | benchmark  | subject     | revs | perf__PERF_COUNT_SW_CPU_CLOCK | perf__PERF_COUNT_HW_INSTRUCTIONS |
++------+------------+-------------+------+-------------------------------+----------------------------------+
+| 0    | SieveBench | benchArray  | 5    | 19285783.2                    | 394889008                        |
+| 1    | SieveBench | benchArray  | 5    | 19460101.6                    | 394851491                        |
++------+------------+-------------+------+-------------------------------+----------------------------------+
+```
+
+Each metric column is normalized per revolution (`raw_count * timeEnabled / timeRunning / revolutions`); the
+unnormalized raw counter total for a metric is also available under a `<metric>_raw` key, which the default
+`perfidious` report generator omits for readability.
+
 ## License
 
 phpbench-perfidious is licensed under the **GNU Affero General Public License version 3 with the Romic Exception**:

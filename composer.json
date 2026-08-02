@@ -1,8 +1,22 @@
 {
     "name": "jbboehr/phpbench-perfidious",
-    "description": "",
+    "description": "PHPBench executor, progress logger, and report generator backed by perf_event_open hardware/software performance counters (via ext-perfidious)",
     "type": "library",
     "license": "AGPL-3.0-only WITH romic-exception",
+    "keywords": [
+        "phpbench",
+        "perfidious",
+        "perf",
+        "perf_event_open",
+        "benchmarking",
+        "profiling",
+        "libpfm4"
+    ],
+    "homepage": "https://github.com/jbboehr/phpbench-perfidious",
+    "support": {
+        "issues": "https://github.com/jbboehr/phpbench-perfidious/issues",
+        "source": "https://github.com/jbboehr/phpbench-perfidious"
+    },
     "authors": [
         {
             "name": "John Boehr",
