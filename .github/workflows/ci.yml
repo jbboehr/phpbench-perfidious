@@ -57,6 +57,24 @@ jobs:
             - name: phpstan
               run: php vendor/bin/phpstan analyze
 
+            - name: Verify release archive
+              if: matrix.php-version == '8.2'
+              run: |
+                  set -euo pipefail
+                  archive_dir="$(mktemp -d)"
+                  composer archive --format=tar --dir="$archive_dir" --file=phpbench-perfidious
+                  tar -tf "$archive_dir/phpbench-perfidious.tar" > "$archive_dir/contents.txt"
+
+                  grep -Fxq "composer.json" "$archive_dir/contents.txt"
+                  grep -Fxq "LICENSE.md" "$archive_dir/contents.txt"
+                  grep -Fxq "src/PerfidiousExecutor.php" "$archive_dir/contents.txt"
+
+                  forbidden='^(\.claude|\.direnv|\.idea|\.phpbench|coverage|tmp|vendor)(/|$)|^(\.editorconfig|\.envrc|\.gitattributes|\.gitignore|\.php-cs-fixer\.cache|\.phpunit\.result\.cache|\.pre-commit-config\.yaml|clover\.xml|psalm\.xml)$|(^|/)[^/]*\.log$|^result'
+                  if grep -E "$forbidden" "$archive_dir/contents.txt"; then
+                      echo "Release archive contains excluded files"
+                      exit 1
+                  fi
+
     test:
         runs-on: ubuntu-latest
         name: "Test | PHP ${{ matrix.php-version }}"
