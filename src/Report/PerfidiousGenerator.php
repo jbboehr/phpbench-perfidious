@@ -37,8 +37,8 @@ class PerfidiousGenerator implements GeneratorInterface
     public function configure(OptionsResolver $options): void
     {
         $options->setDefaults([
-            'title' => 'Cats report',
-            'description' => 'Are cats really cats or are they dogs?',
+            'title' => 'Perfidious report',
+            'description' => 'Per-iteration hardware/software performance counter results.',
         ]);
     }
 

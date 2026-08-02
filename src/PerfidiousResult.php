@@ -65,7 +65,7 @@ class PerfidiousResult implements ResultInterface
     /**
      * @param array<string, mixed> $values
      */
-    public static function fromArray(array $values): ResultInterface
+    public static function fromArray(array $values): self
     {
         $timeRunning = $values['timeRunning'] ?? throw new InvalidArgumentException();
         $timeEnabled = $values['timeEnabled'] ?? throw new InvalidArgumentException();
@@ -78,14 +78,14 @@ class PerfidiousResult implements ResultInterface
         $arr = [];
 
         foreach ($values as $key => $value) {
-            if (!in_array($key, ['timeRunning', 'timeEnabled', 'revolutions']) && is_numeric($value)) {
-                $arr[$key] = (int) $value;
-            } elseif (is_string($value)) {
-                if (str_contains($value, '.')) {
-                    $arr[$key] = (float) $value;
-                } else {
-                    $arr[$key] = (int) $value;
-                }
+            if (in_array($key, ['timeRunning', 'timeEnabled', 'revolutions'], true)) {
+                continue;
+            }
+
+            if (is_int($value) || is_float($value)) {
+                $arr[$key] = $value;
+            } elseif (is_string($value) && is_numeric($value)) {
+                $arr[$key] = str_contains($value, '.') ? (float) $value : (int) $value;
             }
         }
 
@@ -114,8 +114,10 @@ class PerfidiousResult implements ResultInterface
     private static function sanitizeEventName(string $eventName): string
     {
         $eventName = str_replace('::', '__', $eventName);
-        $eventName = preg_replace('/[^\w\d]+/', '-', $eventName);
-        assert(is_string($eventName));
-        return trim($eventName, '-');
+        $sanitized = preg_replace('/[^\w\d]+/', '-', $eventName);
+        if (!is_string($sanitized)) {
+            throw new InvalidArgumentException(sprintf('Failed to sanitize event name "%s"', $eventName));
+        }
+        return trim($sanitized, '-');
     }
 }

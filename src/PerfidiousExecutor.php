@@ -67,7 +67,7 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
     {
         try {
             return $this->doExecute($context, $config);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             throw new ExecutionError(
                 sprintf("Exception encountered in benchmark: %s\n\n[%s]\n\n%s", $e->getMessage(), get_class($e), $e->getTraceAsString()),
             );
@@ -90,10 +90,10 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
             throw new \BadMethodCallException('Method does not exist: ' . $methodName . ' on ' . get_class($benchmark));
         }
 
-        foreach ($context->getBeforeMethods() as $afterMethod) {
-            assert(method_exists($benchmark, $afterMethod));
+        foreach ($context->getBeforeMethods() as $beforeMethod) {
+            assert(method_exists($benchmark, $beforeMethod));
             /** @phpstan-ignore-next-line method.dynamicName */
-            $benchmark->{$afterMethod}($parameters);
+            $benchmark->{$beforeMethod}($parameters);
         }
 
         for ($i = 0; $i < $context->getWarmup() ?: 0; $i++) {

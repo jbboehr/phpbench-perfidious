@@ -57,12 +57,12 @@ class PerfidiousExtension implements ExtensionInterface
             $executor = $container->get(PerfidiousExecutor::class);
             assert($executor instanceof PerfidiousExecutor);
 
-            $local_method_exectuor = $container->get(LocalMethodExecutor::class);
-            assert($local_method_exectuor instanceof LocalMethodExecutor);
+            $localMethodExecutor = $container->get(LocalMethodExecutor::class);
+            assert($localMethodExecutor instanceof LocalMethodExecutor);
 
             return new CompositeExecutor(
                 $executor,
-                new ErrorHandlingExecutorDecorator($local_method_exectuor),
+                new ErrorHandlingExecutorDecorator($localMethodExecutor),
             );
         }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious']]);
 
