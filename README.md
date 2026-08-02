@@ -13,21 +13,40 @@ It provides:
   output;
 - a **report generator** (`perfidious`) that renders the raw and per-revolution-normalized counter values in a table.
 
+## Requirements
+
+- PHP 8.1+
+- [phpbench/phpbench](https://github.com/phpbench/phpbench) ^1.4
+- the [`perfidious`](https://github.com/jbboehr/php-perfidious) PHP extension, loaded and enabled (see
+  [Installation](#installation) below)
+
 ## Installation
 
 ```shell
 composer require --dev jbboehr/phpbench-perfidious
 ```
 
-This package requires the [`perfidious`](https://github.com/jbboehr/php-perfidious) PHP extension to be installed and
-enabled; it is declared as a `suggest` rather than a hard dependency since PHPBench itself doesn't require it.
+This package does not itself bundle the `perfidious` PHP extension — it's declared as a `suggest`, not a hard
+dependency, since PHPBench doesn't require it. Follow php-perfidious's own
+[Installation instructions](https://github.com/jbboehr/php-perfidious#installation) to build and enable it (Ubuntu/
+Debian build deps, `phpize`/`configure`/`make`, then adding `extension=perfidious.so` to your *php.ini*). If you're
+already in a Nix environment, this repo's own [`flake.nix`](flake.nix) devShells (`nix develop .#php82`, etc.) give
+you a PHP build with the extension already compiled in, which is the fastest way to try things out.
+
+If the extension isn't loaded, selecting the `perfidious` executor or calling anything under the `Perfidious\`
+namespace will fail with a PHP fatal error (`Call to undefined function Perfidious\open()`) rather than a friendly
+message — check `php -m | grep perfidious` first if you hit that.
 
 ## Configuration
 
-Enable the extension and its executor/progress logger/report generator in `phpbench.json`:
+Merge these keys into your existing `phpbench.json` to enable the extension and its executor/progress
+logger/report generator (`runner.bootstrap` and `runner.path` below are standard PHPBench keys, shown only for
+context — set them to wherever your own bootstrap file and benchmark classes live):
 
 ```json
 {
+    "runner.bootstrap": "vendor/autoload.php",
+    "runner.path": "tests/Benchmark",
     "runner.executor": "perfidious",
     "runner.progress": "perfidious",
     "core.extensions": [
@@ -54,15 +73,21 @@ Enable the extension and its executor/progress logger/report generator in `phpbe
   unit. They are commonly unavailable in containers and nested/cloud CI runners — prefer the `perf::PERF_COUNT_SW_*`
   software events there.
 
-Then run PHPBench and request the `perfidious` report, e.g. `phpbench run --report=perfidious`:
+Then run PHPBench and request the `perfidious` report, e.g. `phpbench run --report=perfidious`. Here's real output
+from running this repo's own `phpbench.json` (shown above) against its `tests/Benchmark/SieveBench` fixture, with
+rows omitted for brevity — every configured metric gets its own column, normalized per revolution:
 
 ```text
-+------+------------+-------------+------+-------------------------------+----------------------------------+
-| iter | benchmark  | subject     | revs | perf__PERF_COUNT_SW_CPU_CLOCK | perf__PERF_COUNT_HW_INSTRUCTIONS |
-+------+------------+-------------+------+-------------------------------+----------------------------------+
-| 0    | SieveBench | benchArray  | 5    | 19285783.2                    | 394889008                        |
-| 1    | SieveBench | benchArray  | 5    | 19460101.6                    | 394851491                        |
-+------+------------+-------------+------+-------------------------------+----------------------------------+
++------+------------+-------------+------+-------------------------------+----------------------------------+---------------------------------+--------------------------------------+
+| iter | benchmark  | subject     | revs | perf__PERF_COUNT_SW_CPU_CLOCK | perf__PERF_COUNT_HW_INSTRUCTIONS | perf__PERF_COUNT_SW_PAGE_FAULTS | perf__PERF_COUNT_SW_CONTEXT_SWITCHES |
++------+------------+-------------+------+-------------------------------+----------------------------------+---------------------------------+--------------------------------------+
+| 0    | SieveBench | benchArray  | 5    | 19285783.2                    | 394889008                        | 872                             | 0                                    |
+| 1    | SieveBench | benchArray  | 5    | 19460101.6                    | 394851491                        | 799.4                           | 0                                    |
+| ...  | ...        | ...         | ...  | ...                           | ...                              | ...                             | ...                                  |
+| 0    | SieveBench | benchString | 5    | 19313561.4                    | 410109529.8                      | 5.2                             | 0                                    |
+| 1    | SieveBench | benchString | 5    | 18638577                      | 410109435.4                      | 0                               | 0                                    |
+| ...  | ...        | ...         | ...  | ...                           | ...                              | ...                             | ...                                  |
++------+------------+-------------+------+-------------------------------+----------------------------------+---------------------------------+--------------------------------------+
 ```
 
 Each metric column is normalized per revolution (`raw_count * timeEnabled / timeRunning / revolutions`); the
