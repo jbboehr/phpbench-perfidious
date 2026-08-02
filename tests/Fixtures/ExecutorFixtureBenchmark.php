@@ -24,12 +24,19 @@ namespace jbboehr\PhpBenchPerfidious\Tests\Fixtures;
 
 class ExecutorFixtureBenchmark
 {
+    public static int $callCount = 0;
+
     public function passes(): void
     {
         $sum = 0;
         for ($i = 0; $i < 1000; $i++) {
             $sum += $i;
         }
+    }
+
+    public function increments(): void
+    {
+        self::$callCount++;
     }
 
     public function throwsException(): void
@@ -65,5 +72,16 @@ class ExecutorFixtureBenchmark
     public function echoesOutput(): void
     {
         echo 'unexpected output';
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    public function recordsIniSetting(array $parameters): void
+    {
+        $marker = $parameters['marker'];
+        $setting = $parameters['setting'];
+        assert(is_string($marker) && is_string($setting));
+        file_put_contents($marker, (string) ini_get($setting));
     }
 }

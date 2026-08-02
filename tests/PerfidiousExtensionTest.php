@@ -103,6 +103,7 @@ class PerfidiousExtensionTest extends TestCase
         $tagged = $container->getServiceIdsForTag(RunnerExtension::TAG_PROGRESS_LOGGER);
 
         $this->assertArrayHasKey(PerfidiousProgressLogger::class, $tagged);
+        $this->assertSame('perfidious', $tagged[PerfidiousProgressLogger::class]['name']);
 
         $logger = $container->get(PerfidiousProgressLogger::class);
         $this->assertInstanceOf(PerfidiousProgressLogger::class, $logger);
@@ -114,6 +115,7 @@ class PerfidiousExtensionTest extends TestCase
         $tagged = $container->getServiceIdsForTag(ReportExtension::TAG_REPORT_GENERATOR);
 
         $this->assertArrayHasKey(PerfidiousGenerator::class, $tagged);
+        $this->assertSame('perfidious', $tagged[PerfidiousGenerator::class]['name']);
 
         $generator = $container->get(PerfidiousGenerator::class);
         $this->assertInstanceOf(PerfidiousGenerator::class, $generator);

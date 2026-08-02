@@ -22,12 +22,28 @@
 
 namespace jbboehr\PhpBenchPerfidious\Tests;
 
+use DateTime;
+use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Report\PerfidiousGenerator;
+use PhpBench\Expression\Ast\PhpValue;
+use PhpBench\Model\ParameterSet;
+use PhpBench\Model\Suite;
+use PhpBench\Model\SuiteCollection;
+use PhpBench\Registry\Config;
+use PhpBench\Report\Model\Table;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PerfidiousGeneratorTest extends TestCase
 {
+    private function cellValue(Table $table, int $rowIndex, string $key): mixed
+    {
+        $cell = $table->rows()[$rowIndex]->cells()[$key];
+        $this->assertInstanceOf(PhpValue::class, $cell);
+
+        return $cell->value();
+    }
+
     public function testConfigureSetsMeaningfulDefaultTitleAndDescription(): void
     {
         $generator = new PerfidiousGenerator();
@@ -39,5 +55,47 @@ class PerfidiousGeneratorTest extends TestCase
         $this->assertSame('Perfidious report', $resolved['title']);
         $this->assertIsString($resolved['description']);
         $this->assertNotSame('', $resolved['description']);
+    }
+
+    public function testGenerateProducesOneRowPerIterationWithoutRawColumns(): void
+    {
+        $suite = new Suite(null, new DateTime());
+        $benchmark = $suite->createBenchmark(self::class);
+        $subject = $benchmark->createSubject('bench');
+        $variant = $subject->createVariant(ParameterSet::fromUnserializedValues('default', []), 10, 0);
+
+        foreach ([5000, 6000] as $instructions) {
+            $variant->createIteration([
+                PerfidiousResult::create(
+                    timeRunning: 1000,
+                    timeEnabled: 1000,
+                    revolutions: 10,
+                    rawValues: ['perf::PERF_COUNT_HW_INSTRUCTIONS' => $instructions],
+                ),
+            ]);
+        }
+
+        $reports = (new PerfidiousGenerator())->generate(
+            new SuiteCollection([$suite]),
+            new Config('test', []),
+        );
+
+        $tables = $reports->first()->tables();
+        $this->assertCount(1, $tables);
+
+        $table = array_values($tables)[0];
+
+        $rows = $table->rows();
+        $this->assertCount(2, $rows);
+
+        $first = $rows[0]->cells();
+        $this->assertSame(0, $this->cellValue($table, 0, 'iter'));
+        $this->assertSame($benchmark->getName(), $this->cellValue($table, 0, 'benchmark'));
+        $this->assertSame('bench', $this->cellValue($table, 0, 'subject'));
+        $this->assertSame(10, $this->cellValue($table, 0, 'revs'));
+        $this->assertArrayHasKey('perf__PERF_COUNT_HW_INSTRUCTIONS', $first);
+        $this->assertArrayNotHasKey('perf__PERF_COUNT_HW_INSTRUCTIONS_raw', $first);
+
+        $this->assertSame(1, $this->cellValue($table, 1, 'iter'));
     }
 }

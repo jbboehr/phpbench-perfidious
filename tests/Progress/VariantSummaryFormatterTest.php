@@ -26,7 +26,10 @@ use DateTime;
 use jbboehr\PhpBenchPerfidious\PerfidiousExtension;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Progress\VariantSummaryFormatter;
+use PhpBench\Assertion\ParameterProvider;
 use PhpBench\DependencyInjection\Container;
+use PhpBench\Expression\ExpressionLanguage;
+use PhpBench\Expression\Printer\EvaluatingPrinter;
 use PhpBench\Extension\ConsoleExtension;
 use PhpBench\Extension\CoreExtension;
 use PhpBench\Extension\ExpressionExtension;
@@ -44,7 +47,7 @@ use PHPUnit\Framework\TestCase;
 
 class VariantSummaryFormatterTest extends TestCase
 {
-    private function makeFormatter(): VariantSummaryFormatter
+    private function makeContainer(): Container
     {
         $container = new Container([
             CoreExtension::class,
@@ -58,7 +61,12 @@ class VariantSummaryFormatterTest extends TestCase
         ]);
         $container->init();
 
-        $formatter = $container->get(VariantSummaryFormatter::class);
+        return $container;
+    }
+
+    private function makeFormatter(): VariantSummaryFormatter
+    {
+        $formatter = $this->makeContainer()->get(VariantSummaryFormatter::class);
         $this->assertInstanceOf(VariantSummaryFormatter::class, $formatter);
 
         return $formatter;
@@ -103,5 +111,26 @@ class VariantSummaryFormatterTest extends TestCase
         $output = $this->makeFormatter()->formatVariant($this->makeVariant());
 
         $this->assertStringNotContainsString('perf::PERF_COUNT_HW_INSTRUCTIONS', $output);
+    }
+
+    public function testConstructorUsesGivenFormatInsteadOfDefault(): void
+    {
+        $container = $this->makeContainer();
+
+        $parser = $container->get(ExpressionLanguage::class);
+        $printer = $container->get(EvaluatingPrinter::class);
+        $paramProvider = $container->get(ParameterProvider::class);
+        $this->assertInstanceOf(ExpressionLanguage::class, $parser);
+        $this->assertInstanceOf(EvaluatingPrinter::class, $printer);
+        $this->assertInstanceOf(ParameterProvider::class, $paramProvider);
+
+        $formatter = new VariantSummaryFormatter(
+            $parser,
+            $printer,
+            $paramProvider,
+            format: '"custom-format-marker"',
+        );
+
+        $this->assertSame('custom-format-marker', $formatter->formatVariant($this->makeVariant()));
     }
 }

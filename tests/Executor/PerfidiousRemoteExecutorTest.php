@@ -178,4 +178,62 @@ class PerfidiousRemoteExecutorTest extends TestCase
             @unlink($marker);
         }
     }
+
+    public function testConfigureRegistersBaseOptionsAndDefaultsSafeParametersToTrue(): void
+    {
+        $resolver = new OptionsResolver();
+        $this->executor->configure($resolver);
+        $resolved = $resolver->resolve([]);
+
+        // These come from TemplateExecutor::configure(); if execute() ever stopped
+        // calling parent::configure(), OPTION_PHP_CONFIG wouldn't be a registered
+        // option at all and this would fail.
+        $this->assertArrayHasKey(PerfidiousRemoteExecutor::OPTION_PHP_CONFIG, $resolved);
+        $this->assertSame([], $resolved[PerfidiousRemoteExecutor::OPTION_PHP_CONFIG]);
+
+        $this->assertTrue($resolved[PerfidiousRemoteExecutor::OPTION_SAFE_PARAMETERS]);
+    }
+
+    public function testPhpConfigOptionForwardsScalarSettingToChildProcess(): void
+    {
+        $marker = tempnam(sys_get_temp_dir(), 'perfidious-remote-ini-');
+        $this->assertIsString($marker);
+
+        try {
+            $config = $this->resolveConfig([
+                PerfidiousRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => '123M'],
+            ]);
+
+            $this->executor->execute(
+                $this->makeContext('recordsIniSetting', parameters: ['marker' => $marker, 'setting' => 'memory_limit']),
+                $config,
+            );
+
+            $this->assertSame('123M', file_get_contents($marker));
+        } finally {
+            @unlink($marker);
+        }
+    }
+
+    public function testPhpConfigOptionForwardsArrayValuedSettingToChildProcess(): void
+    {
+        $marker = tempnam(sys_get_temp_dir(), 'perfidious-remote-ini-');
+        $this->assertIsString($marker);
+
+        try {
+            $config = $this->resolveConfig([
+                PerfidiousRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => ['64M', '256M']],
+            ]);
+
+            $this->executor->execute(
+                $this->makeContext('recordsIniSetting', parameters: ['marker' => $marker, 'setting' => 'memory_limit']),
+                $config,
+            );
+
+            // Repeated `-d memory_limit=...` flags: the last one wins.
+            $this->assertSame('256M', file_get_contents($marker));
+        } finally {
+            @unlink($marker);
+        }
+    }
 }

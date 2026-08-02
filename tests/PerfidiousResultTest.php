@@ -119,6 +119,12 @@ class PerfidiousResultTest extends TestCase
             'perf__X' => '100.5',
         ]);
 
+        // assertSame is strict, so this also proves the core fields were actually
+        // cast to int rather than left as the numeric strings passed in.
+        $this->assertSame(1000, $result->timeRunning);
+        $this->assertSame(2000, $result->timeEnabled);
+        $this->assertSame(10, $result->revolutions);
+
         $this->assertSame(500, $result->values['perf__X_raw']);
         $this->assertSame(100.5, $result->values['perf__X']);
     }
@@ -128,5 +134,46 @@ class PerfidiousResultTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         PerfidiousResult::fromArray([]);
+    }
+
+    public function testFromArrayThrowsWhenTimeEnabledIsMissing(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        PerfidiousResult::fromArray(['timeRunning' => 1]);
+    }
+
+    public function testFromArrayThrowsWhenRevolutionsIsMissing(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        PerfidiousResult::fromArray(['timeRunning' => 1, 'timeEnabled' => 1]);
+    }
+
+    public function testFromArrayDropsNonNumericStringValues(): void
+    {
+        $result = PerfidiousResult::fromArray([
+            'timeRunning' => 1,
+            'timeEnabled' => 1,
+            'revolutions' => 1,
+            'perf__X' => 'not-a-number',
+        ]);
+
+        $this->assertArrayNotHasKey('perf__X', $result->values);
+    }
+
+    public function testCreateTrimsLeadingAndTrailingDashesFromSanitizedEventNames(): void
+    {
+        // "@foo" -> preg_replace turns the leading "@" into "-foo", which trim()
+        // must then strip back off.
+        $result = PerfidiousResult::create(
+            timeRunning: 1,
+            timeEnabled: 1,
+            revolutions: 1,
+            rawValues: ['@foo' => 1],
+        );
+
+        $this->assertArrayHasKey('foo_raw', $result->values);
+        $this->assertArrayNotHasKey('-foo_raw', $result->values);
     }
 }
