@@ -65,7 +65,7 @@ class PerfidiousExtensionTest extends TestCase
             // where hardware PMU counters are not available.
             PerfidiousExtension::PARAM_PERFIDIOUS_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK'],
             // Needed for PerfidiousRemoteExecutor's child process to autoload fixture classes.
-            RunnerExtension::PARAM_BOOTSTRAP => __DIR__ . '/../vendor/autoload.php',
+            RunnerExtension::PARAM_BOOTSTRAP => __DIR__ . '/bootstrap.php',
         ]);
         $container->init();
 

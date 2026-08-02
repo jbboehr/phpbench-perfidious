@@ -43,7 +43,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
 
     protected function setUp(): void
     {
-        $launcher = new Launcher(bootstrap: __DIR__ . '/../../vendor/autoload.php');
+        $launcher = new Launcher(bootstrap: __DIR__ . '/../bootstrap.php');
 
         // Software-only metric: reliable in sandboxed/virtualized CI environments
         // where hardware PMU counters are not available. It's also in TIME_EVENTS,
