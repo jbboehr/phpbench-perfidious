@@ -4,6 +4,11 @@
     "runner.path": "tests/Benchmark",
     "runner.executor": "perfidious",
     "runner.progress": "perfidious",
+    "core.profiles": {
+        "perfidious-remote": {
+            "runner.executor": "perfidious-remote"
+        }
+    },
     "core.extensions": [
         "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
     ],

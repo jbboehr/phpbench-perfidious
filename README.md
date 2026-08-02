@@ -51,6 +51,11 @@ context — set them to wherever your own bootstrap file and benchmark classes l
     "runner.path": "tests/Benchmark",
     "runner.executor": "perfidious",
     "runner.progress": "perfidious",
+    "core.profiles": {
+        "perfidious-remote": {
+            "runner.executor": "perfidious-remote"
+        }
+    },
     "core.extensions": [
         "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
     ],
@@ -105,14 +110,16 @@ warmup and memory state carry over from one subject to the next).
 `perfidious-remote` runs each variant in its own freshly spawned subprocess instead — the same approach PHPBench's
 own built-in `remote` executor uses — while still collecting perf counters (each subprocess opens its own handle).
 This is opt-in; it isn't PHPBench's builtin default, and this repo's own `phpbench.json` doesn't default to it
-either. Select it with a CLI flag:
+either. The configuration example above defines a profile that selects it reliably:
 
 ```shell
-phpbench run --executor=perfidious-remote --report=perfidious
+phpbench run --profile=perfidious-remote --report=perfidious
 ```
 
-or by setting `"runner.executor": "perfidious-remote"` in your own `phpbench.json`. It uses the same
-`perfidious.metrics` configuration key as the in-process executor.
+Use the profile when `runner.executor` is already set: PHPBench 1.x's configuration precedence can otherwise
+retain that configured executor when `--executor` is passed directly. Alternatively, set
+`"runner.executor": "perfidious-remote"` in your own `phpbench.json`. It uses the same `perfidious.metrics`
+configuration key as the in-process executor.
 
 Trade-offs versus `perfidious`:
 
