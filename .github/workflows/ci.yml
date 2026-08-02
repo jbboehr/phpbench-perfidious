@@ -125,6 +125,56 @@ jobs:
 #            - name: Run benchmarks
 #              run: php vendor/bin/phpbench run
 
+    dependencies:
+        runs-on: ubuntu-latest
+        name: "Dependencies | ${{ matrix.dependency-version }}"
+        strategy:
+            fail-fast: false
+            matrix:
+                dependency-version:
+                    - lowest
+                    - latest
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Install PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  coverage: "none"
+                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
+                  php-version: "8.2"
+                  tools: composer:v2
+              env:
+                  PERFIDIOUS_LINUX_LIBS: libcap-dev libpfm4-dev
+
+            - name: Verify perfidious extension
+              run: php --ri perfidious
+
+            - name: Allow unprivileged performance counters
+              run: sudo sysctl -w kernel.perf_event_paranoid=1
+
+            - name: Cache Composer packages
+              uses: actions/cache@v6
+              with:
+                  path: vendor
+                  key: ${{ runner.os }}-php-8.2-${{ matrix.dependency-version }}-${{ hashFiles('**/composer.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-php-8.2-${{ matrix.dependency-version }}-
+
+            - name: Install lowest supported dependencies
+              if: matrix.dependency-version == 'lowest'
+              run: composer update --prefer-lowest --prefer-stable --no-interaction --prefer-dist --no-progress
+
+            - name: Install latest supported dependencies
+              if: matrix.dependency-version == 'latest'
+              run: composer update --no-interaction --prefer-dist --no-progress
+
+            - name: Show resolved PHPBench version
+              run: composer show phpbench/phpbench
+
+            - name: Run test suite
+              run: php vendor/bin/phpunit --no-coverage
+
     coverage:
         runs-on: ubuntu-latest
         name: "Coverage | PHP ${{ matrix.php-version }}"
