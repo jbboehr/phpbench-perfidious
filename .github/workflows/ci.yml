@@ -44,9 +44,9 @@ jobs:
               uses: actions/cache@v6
               with:
                   path: vendor
-                  key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+                  key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
                   restore-keys: |
-                      ${{ runner.os }}-php-
+                      ${{ runner.os }}-php-${{ matrix.php-version }}-
 
             - name: Install dependencies
               run: composer install --prefer-dist --no-progress --ignore-platform-req=php+
@@ -76,17 +76,26 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   coverage: "none"
+                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
                   php-version: "${{ matrix.php-version }}"
                   tools: composer:v2
+              env:
+                  PERFIDIOUS_LINUX_LIBS: libcap-dev libpfm4-dev
+
+            - name: Verify perfidious extension
+              run: php --ri perfidious
+
+            - name: Allow unprivileged performance counters
+              run: sudo sysctl -w kernel.perf_event_paranoid=1
 
             - name: Cache Composer packages
               id: composer-cache
               uses: actions/cache@v6
               with:
                   path: vendor
-                  key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+                  key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
                   restore-keys: |
-                      ${{ runner.os }}-php-
+                      ${{ runner.os }}-php-${{ matrix.php-version }}-
 
             - name: Install dependencies
               run: composer install --prefer-dist --no-progress
@@ -112,17 +121,26 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   coverage: pcov
+                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
                   php-version: "${{ matrix.php-version }}"
                   tools: composer:v2
+              env:
+                  PERFIDIOUS_LINUX_LIBS: libcap-dev libpfm4-dev
+
+            - name: Verify perfidious extension
+              run: php --ri perfidious
+
+            - name: Allow unprivileged performance counters
+              run: sudo sysctl -w kernel.perf_event_paranoid=1
 
             - name: Cache Composer packages
               id: composer-cache
               uses: actions/cache@v6
               with:
                   path: vendor
-                  key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+                  key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
                   restore-keys: |
-                      ${{ runner.os }}-php-
+                      ${{ runner.os }}-php-${{ matrix.php-version }}-
 
             - name: Install dependencies
               run: composer install --prefer-dist --no-progress
@@ -154,17 +172,26 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   coverage: pcov
+                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
                   php-version: "${{ matrix.php-version }}"
                   tools: composer:v2
+              env:
+                  PERFIDIOUS_LINUX_LIBS: libcap-dev libpfm4-dev
+
+            - name: Verify perfidious extension
+              run: php --ri perfidious
+
+            - name: Allow unprivileged performance counters
+              run: sudo sysctl -w kernel.perf_event_paranoid=1
 
             - name: Cache Composer packages
               id: composer-cache
               uses: actions/cache@v6
               with:
                   path: vendor
-                  key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+                  key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
                   restore-keys: |
-                      ${{ runner.os }}-php-
+                      ${{ runner.os }}-php-${{ matrix.php-version }}-
 
             - name: Install dependencies
               run: composer install --prefer-dist --no-progress
