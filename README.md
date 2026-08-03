@@ -35,8 +35,9 @@ This package does not itself bundle the `perfidious` PHP extension — it's decl
 dependency, since PHPBench doesn't require it. Follow php-perfidious's own
 [Installation instructions](https://github.com/jbboehr/php-perfidious#installation) to build and enable it (Ubuntu/
 Debian build deps, `phpize`/`configure`/`make`, then adding `extension=perfidious.so` to your *php.ini*). If you're
-already in a Nix environment, this repo's own [`flake.nix`](flake.nix) devShells (`nix develop .#php82`, etc.) give
-you a PHP build with the extension already compiled in.
+already in a Nix environment, this repo's own
+[`flake.nix`](https://github.com/jbboehr/phpbench-perfidious/blob/master/flake.nix) devShells
+(`nix develop .#php82`, etc.) give you a PHP build with the extension already compiled in.
 
 If the extension isn't loaded, selecting the `perfidious` executor or calling anything under the `Perfidious\`
 namespace will fail with a PHP fatal error (`Call to undefined function Perfidious\open()`) rather than a friendly
