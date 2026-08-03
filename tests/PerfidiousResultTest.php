@@ -53,6 +53,64 @@ class PerfidiousResultTest extends TestCase
         $this->assertArrayHasKey('perf__PERF_COUNT_HW_INSTRUCTIONS-u_raw', $result->values);
     }
 
+    public function testCreateRejectsSanitizedEventNameCollisions(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Event names "perf/foo" and "perf-foo" both sanitize to metric key "perf-foo"',
+        );
+
+        PerfidiousResult::create(
+            timeRunning: 1,
+            timeEnabled: 1,
+            revolutions: 1,
+            rawValues: ['perf/foo' => 1, 'perf-foo' => 2],
+        );
+    }
+
+    public function testCreateRejectsGeneratedRawMetricKeyCollisions(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Event names "foo" and "foo_raw" produce conflicting metric key "foo_raw"',
+        );
+
+        PerfidiousResult::create(
+            timeRunning: 1,
+            timeEnabled: 1,
+            revolutions: 1,
+            rawValues: ['foo' => 1, 'foo_raw' => 2],
+        );
+    }
+
+    public function testCreateRejectsMetricKeysReservedForResultMetadata(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Event name "timeRunning" produces metric key "timeRunning", which is reserved for result metadata',
+        );
+
+        PerfidiousResult::create(
+            timeRunning: 1,
+            timeEnabled: 1,
+            revolutions: 1,
+            rawValues: ['timeRunning' => 1],
+        );
+    }
+
+    public function testCreateRejectsEventNamesThatSanitizeToAnEmptyKey(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Event name "///" produces an empty metric key');
+
+        PerfidiousResult::create(
+            timeRunning: 1,
+            timeEnabled: 1,
+            revolutions: 1,
+            rawValues: ['///' => 1],
+        );
+    }
+
     public function testConstructorRejectsZeroRevolutions(): void
     {
         $this->expectException(InvalidArgumentException::class);

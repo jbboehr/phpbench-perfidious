@@ -51,11 +51,57 @@ class PerfidiousResult implements ResultInterface
         array $rawValues,
     ): self {
         $values = [];
+        /** @var array<string, string> $sanitizedOwners */
+        $sanitizedOwners = [];
+        /** @var array<string, ?string> $metricOwners */
+        $metricOwners = [
+            'timeRunning' => null,
+            'timeEnabled' => null,
+            'revolutions' => null,
+        ];
 
-        foreach ($rawValues as $key => $value) {
-            $key = self::sanitizeEventName($key);
-            $values[$key . '_raw'] = $value;
-            $values[$key] = $value * $timeEnabled / $timeRunning / $revolutions;
+        foreach ($rawValues as $eventName => $value) {
+            $sanitized = self::sanitizeEventName($eventName);
+            if ('' === $sanitized) {
+                throw new InvalidArgumentException(sprintf('Event name "%s" produces an empty metric key', $eventName));
+            }
+
+            if (isset($sanitizedOwners[$sanitized])) {
+                throw new InvalidArgumentException(sprintf(
+                    'Event names "%s" and "%s" both sanitize to metric key "%s"',
+                    $sanitizedOwners[$sanitized],
+                    $eventName,
+                    $sanitized,
+                ));
+            }
+
+            foreach ([$sanitized . '_raw', $sanitized] as $metricKey) {
+                if (!array_key_exists($metricKey, $metricOwners)) {
+                    continue;
+                }
+
+                $owner = $metricOwners[$metricKey];
+                if (null === $owner) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Event name "%s" produces metric key "%s", which is reserved for result metadata',
+                        $eventName,
+                        $metricKey,
+                    ));
+                }
+
+                throw new InvalidArgumentException(sprintf(
+                    'Event names "%s" and "%s" produce conflicting metric key "%s"',
+                    $owner,
+                    $eventName,
+                    $metricKey,
+                ));
+            }
+
+            $sanitizedOwners[$sanitized] = $eventName;
+            $metricOwners[$sanitized . '_raw'] = $eventName;
+            $metricOwners[$sanitized] = $eventName;
+            $values[$sanitized . '_raw'] = $value;
+            $values[$sanitized] = $value * $timeEnabled / $timeRunning / $revolutions;
         }
 
         return new self(
