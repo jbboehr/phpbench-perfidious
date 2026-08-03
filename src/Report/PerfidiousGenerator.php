@@ -22,33 +22,39 @@
 
 namespace jbboehr\PhpBenchPerfidious\Report;
 
+use InvalidArgumentException;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
-use PhpBench\Dom\Document;
 use PhpBench\Expression\Ast\IntegerNode;
-use PhpBench\Expression\Ast\StringNode;
 use PhpBench\Model\SuiteCollection;
 use PhpBench\Registry\Config;
 use PhpBench\Report\GeneratorInterface;
 use PhpBench\Report\Model\Builder\ReportBuilder;
 use PhpBench\Report\Model\Builder\TableBuilder;
-use PhpBench\Report\Model\Report;
 use PhpBench\Report\Model\Reports;
-use PhpBench\Report\Model\Table;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PerfidiousGenerator implements GeneratorInterface
 {
+    private const DEFAULT_TITLE = 'Perfidious report';
+    private const DEFAULT_DESCRIPTION = 'Per-iteration hardware/software performance counter results.';
+
     public function configure(OptionsResolver $options): void
     {
         $options->setDefaults([
-            'title' => 'Perfidious report',
-            'description' => 'Per-iteration hardware/software performance counter results.',
+            'title' => self::DEFAULT_TITLE,
+            'description' => self::DEFAULT_DESCRIPTION,
         ]);
     }
 
     public function generate(SuiteCollection $suiteCollection, Config $config): Reports
     {
-        $builder = ReportBuilder::create();
+        $title = $config['title'] ?? self::DEFAULT_TITLE;
+        $description = $config['description'] ?? self::DEFAULT_DESCRIPTION;
+        if (!is_string($title) || !is_string($description)) {
+            throw new InvalidArgumentException('Perfidious report title and description must be strings');
+        }
+
+        $builder = ReportBuilder::create($title)->withDescription($description);
 
         foreach ($suiteCollection as $suite) {
             $rows = [];
@@ -71,6 +77,7 @@ class PerfidiousGenerator implements GeneratorInterface
                                 'iter' => new IntegerNode($iteration->getIndex()),
                                 'benchmark' => $benchmark->getName(),
                                 'subject' => $subject->getName(),
+                                'parameter_set' => $variant->getParameterSet()->getName(),
                                 'revs' => $variant->getRevolutions(),
                             ], $values);
 
