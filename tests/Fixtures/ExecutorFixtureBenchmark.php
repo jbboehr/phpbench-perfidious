@@ -26,6 +26,9 @@ class ExecutorFixtureBenchmark
 {
     public static int $callCount = 0;
 
+    /** @var list<int> */
+    public static array $argumentCounts = [];
+
     public function passes(): void
     {
         $sum = 0;
@@ -47,6 +50,18 @@ class ExecutorFixtureBenchmark
     public function throwsError(): void
     {
         throw new \Error('deliberate error from benchmark');
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    public function recordsArgumentCount(array $parameters): void
+    {
+        if ([] !== $parameters) {
+            throw new \LogicException('Expected an empty parameter set');
+        }
+
+        self::$argumentCounts[] = func_num_args();
     }
 
     /**

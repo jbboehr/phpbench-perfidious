@@ -37,6 +37,7 @@ class PerfidiousExecutorTest extends TestCase
     protected function setUp(): void
     {
         ExecutorFixtureBenchmark::$callCount = 0;
+        ExecutorFixtureBenchmark::$argumentCounts = [];
     }
 
     private function makeExecutor(): PerfidiousExecutor
@@ -173,6 +174,16 @@ class PerfidiousExecutorTest extends TestCase
 
         // 4 warmup calls + 1 real revolution.
         $this->assertSame(5, ExecutorFixtureBenchmark::$callCount);
+    }
+
+    public function testWarmupAndMeasuredCallsAlwaysReceiveTheParameterArray(): void
+    {
+        $this->makeExecutor()->execute(
+            $this->makeContext('recordsArgumentCount', revolutions: 3, warmup: 2),
+            new Config('test', []),
+        );
+
+        $this->assertSame([1, 1, 1, 1, 1], ExecutorFixtureBenchmark::$argumentCounts);
     }
 
     public function testBeforeMethodsRunBeforeExecution(): void

@@ -82,6 +82,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
     private function makeContext(
         string $methodName,
         int $revolutions = 1,
+        int $warmup = 0,
         array $beforeMethods = [],
         array $afterMethods = [],
         array $parameters = [],
@@ -94,6 +95,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
             beforeMethods: $beforeMethods,
             afterMethods: $afterMethods,
             parameters: [] !== $parameters ? ParameterSet::fromUnserializedValues('test', $parameters) : null,
+            warmup: $warmup,
         );
     }
 
@@ -177,6 +179,16 @@ class PerfidiousRemoteExecutorTest extends TestCase
             @unlink($marker . '.after');
             @unlink($marker);
         }
+    }
+
+    public function testWarmupAndMeasuredCallsSupportABenchmarkRequiringTheEmptyParameterArray(): void
+    {
+        $results = $this->executor->execute(
+            $this->makeContext('recordsArgumentCount', revolutions: 3, warmup: 2),
+            $this->resolveConfig(),
+        );
+
+        $this->assertInstanceOf(PerfidiousResult::class, $results->byType(PerfidiousResult::class)->first());
     }
 
     public function testConfigureRegistersBaseOptionsAndDefaultsSafeParametersToTrue(): void

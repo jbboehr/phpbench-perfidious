@@ -49,15 +49,8 @@ if ($warmup) {
 $handle->reset();
 $handle->enable();
 
-// only pass parameters if they are supplied: passing parameters costs time
-if ($parameters) {
-    for ($i = 0; $i < {{ revolutions }}; $i++) {
-        $benchmark->{{ subject }}($parameters);
-    }
-} else {
-    for ($i = 0; $i < {{ revolutions }}; $i++) {
-        $benchmark->{{ subject }}();
-    }
+for ($i = 0; $i < {{ revolutions }}; $i++) {
+    $benchmark->{{ subject }}($parameters);
 }
 
 $handle->disable();
