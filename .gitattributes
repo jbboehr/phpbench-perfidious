@@ -5,6 +5,7 @@ flake.lock linguist-generated
 
 /.claude export-ignore
 /.direnv export-ignore
+/.github export-ignore
 /AGENTS.md export-ignore
 .editorconfig export-ignore
 .envrc export-ignore
@@ -12,12 +13,23 @@ flake.lock linguist-generated
 /.gitignore export-ignore
 /.idea export-ignore
 /.php-cs-fixer.cache export-ignore
+/.php-cs-fixer.dist.php export-ignore
 /.phpbench export-ignore
 /.phpunit.result.cache export-ignore
 /.pre-commit-config.yaml export-ignore
 /clover.xml export-ignore
+/composer.lock export-ignore
 /coverage export-ignore
+/flake.lock export-ignore
+/flake.nix export-ignore
+/infection.json5 export-ignore
+/nix export-ignore
+/phpbench.json export-ignore
+/phpstan.neon.dist export-ignore
+/phpunit.xml.dist export-ignore
 *.log export-ignore
 /result* export-ignore
+/stubs export-ignore
+/tests export-ignore
 /tmp export-ignore
 /vendor export-ignore
