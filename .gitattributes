@@ -5,6 +5,7 @@ flake.lock linguist-generated
 
 /.claude export-ignore
 /.direnv export-ignore
+/AGENTS.md export-ignore
 .editorconfig export-ignore
 .envrc export-ignore
 .gitattributes export-ignore

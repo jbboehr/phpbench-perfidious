@@ -1,14 +1,13 @@
-
 # phpbench-perfidious
 
-[PHPBench](https://github.com/phpbench/phpbench) extension that measures benchmark iterations with hardware and
-software performance counters (instructions, cycles, cache misses, page faults, context switches, ...) via
+[PHPBench](https://github.com/phpbench/phpbench) extension for Linux that measures benchmark iterations with hardware
+and software performance counters (instructions, cycles, cache misses, page faults, context switches, ...) via
 [`ext-perfidious`](https://github.com/jbboehr/php-perfidious), instead of (or alongside) wall-clock time.
 
 It provides:
 
-- a benchmark **executor** (`perfidious`) that wraps each variant's revolutions in a `perf_event_open` handle and
-  attaches the counter values as an extra result alongside the normal time/memory results;
+- a benchmark **executor** (`perfidious`) that wraps each variant's revolutions in a `perf_event_open` handle, records
+  the counter values, and supplies PHPBench timing data when a supported clock event is configured;
 - a second **executor** (`perfidious-remote`) that does the same thing but in an isolated subprocess per variant,
   like PHPBench's own built-in `remote` executor — see [Remote execution](#remote-execution) below;
 - a **progress logger** (`perfidious`) that adds an instructions-per-iteration summary to PHPBench's verbose progress
@@ -17,7 +16,8 @@ It provides:
 
 ## Requirements
 
-- PHP 8.1+
+- Linux with the `perf_events` kernel API available
+- PHP 8.1+ (tested on PHP 8.1–8.5)
 - [phpbench/phpbench](https://github.com/phpbench/phpbench) ^1.4
 - the [`perfidious`](https://github.com/jbboehr/php-perfidious) PHP extension, loaded and enabled (see
   [Installation](#installation) below)
@@ -25,37 +25,33 @@ It provides:
 ## Installation
 
 ```shell
-composer require --dev jbboehr/phpbench-perfidious
+composer require --dev jbboehr/phpbench-perfidious:dev-master
 ```
+
+Until the first tagged release, the explicit `dev-master` constraint is required because Packagist only has development
+versions of the package.
 
 This package does not itself bundle the `perfidious` PHP extension — it's declared as a `suggest`, not a hard
 dependency, since PHPBench doesn't require it. Follow php-perfidious's own
 [Installation instructions](https://github.com/jbboehr/php-perfidious#installation) to build and enable it (Ubuntu/
 Debian build deps, `phpize`/`configure`/`make`, then adding `extension=perfidious.so` to your *php.ini*). If you're
 already in a Nix environment, this repo's own [`flake.nix`](flake.nix) devShells (`nix develop .#php82`, etc.) give
-you a PHP build with the extension already compiled in, which is the fastest way to try things out.
+you a PHP build with the extension already compiled in.
 
 If the extension isn't loaded, selecting the `perfidious` executor or calling anything under the `Perfidious\`
 namespace will fail with a PHP fatal error (`Call to undefined function Perfidious\open()`) rather than a friendly
 message — check `php -m | grep perfidious` first if you hit that.
 
-## Configuration
+## Quick start
 
-Merge these keys into your existing `phpbench.json` to enable the extension and its executor/progress
-logger/report generator (`runner.bootstrap` and `runner.path` below are standard PHPBench keys, shown only for
-context — set them to wherever your own bootstrap file and benchmark classes live):
+In an existing PHPBench project, merge these keys into `phpbench.json`. The `runner.bootstrap` and `runner.path` values
+are standard PHPBench settings; adjust them to match your project:
 
 ```json
 {
     "runner.bootstrap": "vendor/autoload.php",
     "runner.path": "tests/Benchmark",
     "runner.executor": "perfidious",
-    "runner.progress": "perfidious",
-    "core.profiles": {
-        "perfidious-remote": {
-            "runner.executor": "perfidious-remote"
-        }
-    },
     "core.extensions": [
         "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
     ],
@@ -66,9 +62,7 @@ context — set them to wherever your own bootstrap file and benchmark classes l
     },
     "perfidious.metrics": [
         "perf::PERF_COUNT_SW_CPU_CLOCK",
-        "perf::PERF_COUNT_HW_INSTRUCTIONS",
-        "perf::PERF_COUNT_SW_PAGE_FAULTS",
-        "perf::PERF_COUNT_SW_CONTEXT_SWITCHES"
+        "perf::PERF_COUNT_HW_INSTRUCTIONS"
     ]
 }
 ```
@@ -77,29 +71,36 @@ context — set them to wherever your own bootstrap file and benchmark classes l
   the full list, or `phpbench.json`'s own schema for the format). Defaults to
   `perf::PERF_COUNT_SW_CPU_CLOCK` and `perf::PERF_COUNT_HW_INSTRUCTIONS` if omitted.
 - Hardware counters (anything under `perf::PERF_COUNT_HW_*`) require host access to the CPU's performance-monitoring
-  unit. They are commonly unavailable in containers and nested/cloud CI runners — prefer the `perf::PERF_COUNT_SW_*`
-  software events there.
+  unit. They are commonly unavailable in containers and nested/cloud CI runners; meaningful hardware-counter
+  benchmarks must run on a PMU-enabled host.
+- Set `"runner.progress": "perfidious"` to add the instructions-per-iteration progress summary. This logger requires
+  `perf::PERF_COUNT_HW_INSTRUCTIONS` to be present in `perfidious.metrics`.
 
-GitHub-hosted runners do not expose the hardware PMU events used by this repository's normal configuration. The
-end-to-end CI test therefore uses a dedicated `perfidious-remote-ci` profile limited to
-`perf::PERF_COUNT_SW_CPU_CLOCK`. CI verifies executor integration and software counting only; hardware events must be
-validated on a PMU-enabled host.
+GitHub-hosted runners do not expose the hardware PMU events used in real benchmarks. This repository's end-to-end CI
+test therefore falls back to `perf::PERF_COUNT_SW_CPU_CLOCK` and disables the instruction-specific progress logger. CI
+verifies executor integration only; it does not validate hardware events.
 
-Then run PHPBench and request the `perfidious` report, e.g. `phpbench run --report=perfidious`. Here's real output
-from running this repo's own `phpbench.json` (shown above) against its `tests/Benchmark/SieveBench` fixture, with
-rows omitted for brevity — every configured metric gets its own column, normalized per revolution:
+Then run PHPBench and request the `perfidious` report:
+
+```shell
+vendor/bin/phpbench run --report=perfidious
+```
+
+Here's real output from running this repo's own `phpbench.json` against its `tests/Benchmark/SieveBench` fixture, with
+rows and additional metric columns omitted for brevity. Every configured metric gets its own column, normalized per
+revolution:
 
 ```text
-+------+------------+-------------+------+-------------------------------+----------------------------------+---------------------------------+--------------------------------------+
-| iter | benchmark  | subject     | revs | perf__PERF_COUNT_SW_CPU_CLOCK | perf__PERF_COUNT_HW_INSTRUCTIONS | perf__PERF_COUNT_SW_PAGE_FAULTS | perf__PERF_COUNT_SW_CONTEXT_SWITCHES |
-+------+------------+-------------+------+-------------------------------+----------------------------------+---------------------------------+--------------------------------------+
-| 0    | SieveBench | benchArray  | 5    | 19285783.2                    | 394889008                        | 872                             | 0                                    |
-| 1    | SieveBench | benchArray  | 5    | 19460101.6                    | 394851491                        | 799.4                           | 0                                    |
-| ...  | ...        | ...         | ...  | ...                           | ...                              | ...                             | ...                                  |
-| 0    | SieveBench | benchString | 5    | 19313561.4                    | 410109529.8                      | 5.2                             | 0                                    |
-| 1    | SieveBench | benchString | 5    | 18638577                      | 410109435.4                      | 0                               | 0                                    |
-| ...  | ...        | ...         | ...  | ...                           | ...                              | ...                             | ...                                  |
-+------+------------+-------------+------+-------------------------------+----------------------------------+---------------------------------+--------------------------------------+
++------+------------+-------------+------+-------------------------------+----------------------------------+
+| iter | benchmark  | subject     | revs | perf__PERF_COUNT_SW_CPU_CLOCK | perf__PERF_COUNT_HW_INSTRUCTIONS |
++------+------------+-------------+------+-------------------------------+----------------------------------+
+| 0    | SieveBench | benchArray  | 5    | 19285783.2                    | 394889008                        |
+| 1    | SieveBench | benchArray  | 5    | 19460101.6                    | 394851491                        |
+| ...  | ...        | ...         | ...  | ...                           | ...                              |
+| 0    | SieveBench | benchString | 5    | 19313561.4                    | 410109529.8                      |
+| 1    | SieveBench | benchString | 5    | 18638577                      | 410109435.4                      |
+| ...  | ...        | ...         | ...  | ...                           | ...                              |
++------+------------+-------------+------+-------------------------------+----------------------------------+
 ```
 
 Each metric column is normalized per revolution (`raw_count * timeEnabled / timeRunning / revolutions`); the
@@ -114,11 +115,21 @@ warmup and memory state carry over from one subject to the next).
 
 `perfidious-remote` runs each variant in its own freshly spawned subprocess instead — the same approach PHPBench's
 own built-in `remote` executor uses — while still collecting perf counters (each subprocess opens its own handle).
-This is opt-in; it isn't PHPBench's builtin default, and this repo's own `phpbench.json` doesn't default to it
-either. The configuration example above defines a profile that selects it reliably:
+This is opt-in; it isn't PHPBench's builtin default, and this repo's own `phpbench.json` doesn't default to it either.
+Define a profile that selects it reliably:
+
+```json
+{
+    "core.profiles": {
+        "perfidious-remote": {
+            "runner.executor": "perfidious-remote"
+        }
+    }
+}
+```
 
 ```shell
-phpbench run --profile=perfidious-remote --report=perfidious
+vendor/bin/phpbench run --profile=perfidious-remote --report=perfidious
 ```
 
 Use the profile when `runner.executor` is already set: PHPBench 1.x's configuration precedence can otherwise
@@ -143,11 +154,6 @@ The flake exposes development packages for every supported PHP version: `nix bui
 `nix build .#php85` (with PHP 8.2 at `.#default`). These outputs intentionally include Composer development
 dependencies and run the PHPUnit suite while building; they are CI and development artifacts, not minimal runtime
 packages.
-
-All five packages reuse one Composer vendor derivation generated with the lowest supported PHP version, PHP 8.1.
-After changing `composer.lock`, temporarily set that derivation's `vendorHash` in `flake.nix` to `lib.fakeHash`, build
-any package, copy the `got: sha256-...` value from Nix's expected hash-mismatch error, replace `lib.fakeHash` with that
-value, and rebuild. No generated Nix files or per-PHP hashes are required.
 
 ## License
 
