@@ -136,12 +136,15 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
         $this->handle->reset();
         $this->handle->enable();
 
-        for ($i = 0; $i < $context->getRevolutions(); $i++) {
-            /** @phpstan-ignore-next-line method.dynamicName */
-            $benchmark->{$methodName}($parameters);
+        try {
+            for ($i = 0; $i < $context->getRevolutions(); $i++) {
+                /** @phpstan-ignore-next-line method.dynamicName */
+                $benchmark->{$methodName}($parameters);
+            }
+        } finally {
+            $this->handle->disable();
         }
 
-        $this->handle->disable();
         $rr = $this->handle->read();
 
         self::assertCountersRan($rr->timeRunning);

@@ -108,6 +108,19 @@ class PerfidiousExecutorTest extends TestCase
         $this->makeExecutor()->execute($this->makeContext('throwsException'), new Config('test', []));
     }
 
+    public function testHandleIsDisabledWhenBenchmarkMethodThrows(): void
+    {
+        $handle = new FakeHandle();
+        $executor = new PerfidiousExecutor($handle);
+
+        try {
+            $executor->execute($this->makeContext('throwsException'), new Config('test', []));
+            $this->fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError) {
+            $this->assertSame(['reset', 'enable', 'disable'], $handle->calls);
+        }
+    }
+
     public function testErrorFromBenchmarkMethodIsWrappedAsExecutionError(): void
     {
         // Regression test: \Error (e.g. TypeError, "call to undefined method") is not
