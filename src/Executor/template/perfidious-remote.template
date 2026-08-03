@@ -7,6 +7,13 @@ gc_disable();
 ob_start();
 
 $metrics = {{ metrics }};
+
+if (!function_exists('Perfidious\\open')) {
+    throw new \RuntimeException(
+        'The perfidious PHP extension is required; install and enable ext-perfidious before using this executor.'
+    );
+}
+
 $handle = \Perfidious\open($metrics);
 
 $class = '{{ class }}';

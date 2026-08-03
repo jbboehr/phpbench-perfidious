@@ -46,6 +46,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionProperty;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 
 class PerfidiousExtensionTest extends TestCase
 {
@@ -83,6 +84,30 @@ class PerfidiousExtensionTest extends TestCase
         );
         $this->assertIsString($container->getParameter(PerfidiousExtension::PARAM_PROGRESS_SUMMARY_FORMAT));
         $this->assertIsString($container->getParameter(PerfidiousExtension::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT));
+    }
+
+    public function testConfigureRejectsNonStringMetricValues(): void
+    {
+        $resolver = new OptionsResolver();
+        (new PerfidiousExtension())->configure($resolver);
+
+        $this->expectException(InvalidOptionsException::class);
+
+        $resolver->resolve([
+            PerfidiousExtension::PARAM_PERFIDIOUS_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK', 42],
+        ]);
+    }
+
+    public function testConfigureRejectsNonStringProgressFormats(): void
+    {
+        $resolver = new OptionsResolver();
+        (new PerfidiousExtension())->configure($resolver);
+
+        $this->expectException(InvalidOptionsException::class);
+
+        $resolver->resolve([
+            PerfidiousExtension::PARAM_PROGRESS_SUMMARY_FORMAT => ['not a string'],
+        ]);
     }
 
     public function testRegistersExecutorUnderPerfidiousTag(): void

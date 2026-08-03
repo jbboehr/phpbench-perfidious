@@ -208,16 +208,29 @@ class PerfidiousResultTest extends TestCase
         PerfidiousResult::fromArray(['timeRunning' => 1, 'timeEnabled' => 1]);
     }
 
-    public function testFromArrayDropsNonNumericStringValues(): void
+    public function testFromArrayRejectsNonNumericValues(): void
     {
-        $result = PerfidiousResult::fromArray([
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Perfidious result value "perf__X" must be numeric, got string');
+
+        PerfidiousResult::fromArray([
             'timeRunning' => 1,
             'timeEnabled' => 1,
             'revolutions' => 1,
             'perf__X' => 'not-a-number',
         ]);
+    }
 
-        $this->assertArrayNotHasKey('perf__X', $result->values);
+    public function testFromArrayRejectsInvalidRequiredValueTypes(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Perfidious result value "timeRunning" must be numeric, got array');
+
+        PerfidiousResult::fromArray([
+            'timeRunning' => [],
+            'timeEnabled' => 1,
+            'revolutions' => 1,
+        ]);
     }
 
     public function testCreateTrimsLeadingAndTrailingDashesFromSanitizedEventNames(): void

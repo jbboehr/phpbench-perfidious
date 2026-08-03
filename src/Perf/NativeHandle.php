@@ -24,6 +24,7 @@ namespace jbboehr\PhpBenchPerfidious\Perf;
 
 use Perfidious\Handle;
 use Perfidious\ReadResult;
+use RuntimeException;
 
 use function Perfidious\open;
 
@@ -41,6 +42,12 @@ final class NativeHandle implements HandleInterface
      */
     public function __construct(array $metrics)
     {
+        if (!function_exists('Perfidious\\open')) {
+            throw new RuntimeException(
+                'The perfidious PHP extension is required; install and enable ext-perfidious before using this executor.',
+            );
+        }
+
         $this->handle = open($metrics);
     }
 

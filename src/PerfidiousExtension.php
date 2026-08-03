@@ -56,16 +56,28 @@ class PerfidiousExtension implements ExtensionInterface
             self::PARAM_PROGRESS_SUMMARY_FORMAT => VariantSummaryFormatter::DEFAULT_FORMAT,
             self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT => VariantSummaryFormatter::BASELINE_FORMAT,
         ]);
+        $resolver->setAllowedTypes(self::PARAM_PERFIDIOUS_METRICS, 'array');
+        $resolver->setAllowedValues(
+            self::PARAM_PERFIDIOUS_METRICS,
+            static function (array $metrics): bool {
+                foreach ($metrics as $metric) {
+                    if (!is_string($metric)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+        );
+        $resolver->setAllowedTypes(self::PARAM_PROGRESS_SUMMARY_FORMAT, 'string');
+        $resolver->setAllowedTypes(self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT, 'string');
     }
 
     public function load(Container $container): void
     {
         $container->register(PerfidiousExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
-            $executor = $container->get(PerfidiousExecutor::class);
-            assert($executor instanceof PerfidiousExecutor);
-
-            $localMethodExecutor = $container->get(LocalMethodExecutor::class);
-            assert($localMethodExecutor instanceof LocalMethodExecutor);
+            $executor = self::get($container, PerfidiousExecutor::class);
+            $localMethodExecutor = self::get($container, LocalMethodExecutor::class);
 
             return new CompositeExecutor(
                 $executor,
@@ -75,14 +87,15 @@ class PerfidiousExtension implements ExtensionInterface
 
         $container->register(PerfidiousExecutor::class, static function (Container $container): PerfidiousExecutor {
             $bootstrap = $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP);
-            assert(is_string($bootstrap) || is_null($bootstrap));
+            if (!is_string($bootstrap) && null !== $bootstrap) {
+                throw new \UnexpectedValueException(sprintf(
+                    'Container parameter "%s" must be string or null, got %s',
+                    RunnerExtension::PARAM_BOOTSTRAP,
+                    get_debug_type($bootstrap),
+                ));
+            }
 
-            $metrics = $container->getParameter(self::PARAM_PERFIDIOUS_METRICS);
-            assert(is_array($metrics));
-            $metrics = array_values(array_map(function ($metric): string {
-                assert(is_string($metric));
-                return $metric;
-            }, $metrics));
+            $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_METRICS);
 
             return PerfidiousExecutor::withMetrics(
                 metrics: $metrics,
@@ -91,11 +104,8 @@ class PerfidiousExtension implements ExtensionInterface
         });
 
         $container->register(PerfidiousRemoteExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
-            $executor = $container->get(PerfidiousRemoteExecutor::class);
-            assert($executor instanceof PerfidiousRemoteExecutor);
-
-            $remoteMethodExecutor = $container->get(RemoteMethodExecutor::class);
-            assert($remoteMethodExecutor instanceof RemoteMethodExecutor);
+            $executor = self::get($container, PerfidiousRemoteExecutor::class);
+            $remoteMethodExecutor = self::get($container, RemoteMethodExecutor::class);
 
             return new CompositeExecutor(
                 $executor,
@@ -104,15 +114,8 @@ class PerfidiousExtension implements ExtensionInterface
         }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-remote']]);
 
         $container->register(PerfidiousRemoteExecutor::class, static function (Container $container): PerfidiousRemoteExecutor {
-            $launcher = $container->get(Launcher::class);
-            assert($launcher instanceof Launcher);
-
-            $metrics = $container->getParameter(self::PARAM_PERFIDIOUS_METRICS);
-            assert(is_array($metrics));
-            $metrics = array_values(array_map(function ($metric): string {
-                assert(is_string($metric));
-                return $metric;
-            }, $metrics));
+            $launcher = self::get($container, Launcher::class);
+            $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_METRICS);
 
             return new PerfidiousRemoteExecutor(
                 launcher: $launcher,
@@ -160,14 +163,59 @@ class PerfidiousExtension implements ExtensionInterface
     private static function get(Container $container, string $class, ?string $key = null): object
     {
         $object = $container->get($key ?? $class);
-        assert(is_object($object) && is_a($object, $class, true));
+        if (!is_object($object) || !is_a($object, $class)) {
+            throw new \UnexpectedValueException(sprintf(
+                'Container service "%s" must be an instance of %s, got %s',
+                $key ?? $class,
+                $class,
+                get_debug_type($object),
+            ));
+        }
+
         return $object;
     }
 
     private static function getParameterString(Container $container, string $name): string
     {
         $param = $container->getParameter($name);
-        assert(is_string($param));
+        if (!is_string($param)) {
+            throw new \UnexpectedValueException(sprintf(
+                'Container parameter "%s" must be a string, got %s',
+                $name,
+                get_debug_type($param),
+            ));
+        }
+
         return $param;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function getStringListParameter(Container $container, string $name): array
+    {
+        $param = $container->getParameter($name);
+        if (!is_array($param)) {
+            throw new \UnexpectedValueException(sprintf(
+                'Container parameter "%s" must be an array, got %s',
+                $name,
+                get_debug_type($param),
+            ));
+        }
+
+        $values = [];
+        foreach ($param as $key => $value) {
+            if (!is_string($value)) {
+                throw new \UnexpectedValueException(sprintf(
+                    'Container parameter "%s" value at key "%s" must be a string, got %s',
+                    $name,
+                    $key,
+                    get_debug_type($value),
+                ));
+            }
+            $values[] = $value;
+        }
+
+        return $values;
     }
 }

@@ -44,6 +44,8 @@ class PerfidiousGenerator implements GeneratorInterface
             'title' => self::DEFAULT_TITLE,
             'description' => self::DEFAULT_DESCRIPTION,
         ]);
+        $options->setAllowedTypes('title', 'string');
+        $options->setAllowedTypes('description', 'string');
     }
 
     public function generate(SuiteCollection $suiteCollection, Config $config): Reports

@@ -113,21 +113,24 @@ class PerfidiousResult implements ResultInterface
     }
 
     /**
-     * @param array<string, mixed> $values
+     * @param array<array-key, mixed> $values
      */
     public static function fromArray(array $values): self
     {
-        $timeRunning = $values['timeRunning'] ?? throw new InvalidArgumentException();
-        $timeEnabled = $values['timeEnabled'] ?? throw new InvalidArgumentException();
-        $revolutions = $values['revolutions'] ?? throw new InvalidArgumentException();
-
-        assert(is_numeric($timeRunning));
-        assert(is_numeric($timeEnabled));
-        assert(is_numeric($revolutions));
+        $timeRunning = self::requireNumericValue($values, 'timeRunning');
+        $timeEnabled = self::requireNumericValue($values, 'timeEnabled');
+        $revolutions = self::requireNumericValue($values, 'revolutions');
 
         $arr = [];
 
         foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Perfidious result keys must be strings, got %s key',
+                    get_debug_type($key),
+                ));
+            }
+
             if (in_array($key, ['timeRunning', 'timeEnabled', 'revolutions'], true)) {
                 continue;
             }
@@ -136,6 +139,12 @@ class PerfidiousResult implements ResultInterface
                 $arr[$key] = $value;
             } elseif (is_string($value) && is_numeric($value)) {
                 $arr[$key] = str_contains($value, '.') ? (float) $value : (int) $value;
+            } else {
+                throw new InvalidArgumentException(sprintf(
+                    'Perfidious result value "%s" must be numeric, got %s',
+                    $key,
+                    get_debug_type($value),
+                ));
             }
         }
 
@@ -159,6 +168,27 @@ class PerfidiousResult implements ResultInterface
     public function getKey(): string
     {
         return 'perfidious';
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     */
+    private static function requireNumericValue(array $values, string $key): int|float|string
+    {
+        if (!array_key_exists($key, $values)) {
+            throw new InvalidArgumentException(sprintf('Perfidious result is missing required value "%s"', $key));
+        }
+
+        $value = $values[$key];
+        if (!is_int($value) && !is_float($value) && !(is_string($value) && is_numeric($value))) {
+            throw new InvalidArgumentException(sprintf(
+                'Perfidious result value "%s" must be numeric, got %s',
+                $key,
+                get_debug_type($value),
+            ));
+        }
+
+        return $value;
     }
 
     private static function sanitizeEventName(string $eventName): string

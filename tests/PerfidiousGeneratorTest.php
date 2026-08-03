@@ -32,6 +32,7 @@ use PhpBench\Model\SuiteCollection;
 use PhpBench\Registry\Config;
 use PhpBench\Report\Model\Table;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class PerfidiousGeneratorTest extends TestCase
@@ -55,6 +56,17 @@ class PerfidiousGeneratorTest extends TestCase
         $this->assertSame('Perfidious report', $resolved['title']);
         $this->assertIsString($resolved['description']);
         $this->assertNotSame('', $resolved['description']);
+    }
+
+    public function testConfigureRejectsNonStringMetadata(): void
+    {
+        $generator = new PerfidiousGenerator();
+        $resolver = new OptionsResolver();
+        $generator->configure($resolver);
+
+        $this->expectException(InvalidOptionsException::class);
+
+        $resolver->resolve(['title' => ['not a string']]);
     }
 
     public function testGenerateProducesOneRowPerIterationWithoutRawColumns(): void

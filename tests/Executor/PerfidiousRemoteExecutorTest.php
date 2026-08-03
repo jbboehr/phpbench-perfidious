@@ -32,11 +32,14 @@ use PhpBench\Model\Result\MemoryResult;
 use PhpBench\Model\Result\TimeResult;
 use PhpBench\Model\ParameterSet;
 use PhpBench\Registry\Config;
+use PhpBench\Remote\Exception\ScriptErrorException;
 use PhpBench\Remote\Launcher;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 use RuntimeException;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use UnexpectedValueException;
 
 class PerfidiousRemoteExecutorTest extends TestCase
 {
@@ -122,9 +125,12 @@ class PerfidiousRemoteExecutorTest extends TestCase
 
     public function testExceptionFromBenchmarkMethodIsWrappedAsExecutionError(): void
     {
-        $this->expectException(ExecutionError::class);
-
-        $this->executor->execute($this->makeContext('throwsException'), $this->resolveConfig());
+        try {
+            $this->executor->execute($this->makeContext('throwsException'), $this->resolveConfig());
+            $this->fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError $error) {
+            $this->assertInstanceOf(ScriptErrorException::class, $error->getPrevious());
+        }
     }
 
     public function testErrorFromBenchmarkMethodIsWrappedAsExecutionError(): void
@@ -216,6 +222,50 @@ class PerfidiousRemoteExecutorTest extends TestCase
             'perf::PERF_COUNT_SW_CPU_CLOCK',
             'perf::TASK-CLOCK',
         ]);
+    }
+
+    public function testExecuteRejectsInvalidPhpConfigValues(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Executor option "php_config.memory_limit" must be scalar or an array of scalars, got stdClass',
+        );
+
+        $this->executor->execute(
+            $this->makeContext('passes'),
+            new Config('test', [
+                PerfidiousRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => new \stdClass()],
+            ]),
+        );
+    }
+
+    public function testDecodeResultsReportsTheInvalidKeyAndType(): void
+    {
+        $method = new ReflectionMethod(PerfidiousRemoteExecutor::class, 'decodeResults');
+
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('Remote result key "mem.peak" must be an int, got string');
+
+        $method->invoke($this->executor, $this->makeContext('passes'), [
+            'mem' => ['peak' => 'invalid', 'real' => 1, 'final' => 1],
+            'perf' => ['timeRunning' => 1, 'timeEnabled' => 1, 'rawValues' => []],
+        ]);
+    }
+
+    public function testMissingExtensionHasATargetedDiagnosticInTheChildProcess(): void
+    {
+        $executor = new PerfidiousRemoteExecutor(
+            new Launcher(bootstrap: __DIR__ . '/../bootstrap.php', phpDisableIni: true),
+            metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK'],
+        );
+
+        try {
+            $executor->execute($this->makeContext('passes'), $this->resolveConfig());
+            $this->fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError $error) {
+            $this->assertStringContainsString('The perfidious PHP extension is required', $error->getMessage());
+            $this->assertInstanceOf(ScriptErrorException::class, $error->getPrevious());
+        }
     }
 
     public function testPhpConfigOptionForwardsScalarSettingToChildProcess(): void

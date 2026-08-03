@@ -129,9 +129,14 @@ class PerfidiousExecutorTest extends TestCase
 
     public function testExceptionFromBenchmarkMethodIsWrappedAsExecutionError(): void
     {
-        $this->expectException(ExecutionError::class);
-
-        $this->makeExecutor()->execute($this->makeContext('throwsException'), new Config('test', []));
+        try {
+            $this->makeExecutor()->execute($this->makeContext('throwsException'), new Config('test', []));
+            $this->fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError $error) {
+            $previous = $error->getPrevious();
+            $this->assertInstanceOf(\RuntimeException::class, $previous);
+            $this->assertSame('deliberate exception from benchmark', $previous->getMessage());
+        }
     }
 
     public function testHandleIsDisabledWhenBenchmarkMethodThrows(): void
@@ -167,6 +172,34 @@ class PerfidiousExecutorTest extends TestCase
                 'Method does not exist: doesNotExist on ' . ExecutorFixtureBenchmark::class,
                 $e->getMessage(),
             );
+        }
+    }
+
+    public function testMissingBeforeMethodHasAnExplicitDiagnostic(): void
+    {
+        try {
+            $this->makeExecutor()->execute(
+                $this->makeContext('passes', beforeMethods: ['doesNotExist']),
+                new Config('test', []),
+            );
+            $this->fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError $error) {
+            $this->assertStringContainsString('Before method does not exist: doesNotExist', $error->getMessage());
+            $this->assertInstanceOf(\BadMethodCallException::class, $error->getPrevious());
+        }
+    }
+
+    public function testMissingAfterMethodHasAnExplicitDiagnostic(): void
+    {
+        try {
+            $this->makeExecutor()->execute(
+                $this->makeContext('passes', afterMethods: ['doesNotExist']),
+                new Config('test', []),
+            );
+            $this->fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError $error) {
+            $this->assertStringContainsString('After method does not exist: doesNotExist', $error->getMessage());
+            $this->assertInstanceOf(\BadMethodCallException::class, $error->getPrevious());
         }
     }
 

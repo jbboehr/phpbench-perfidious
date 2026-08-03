@@ -22,6 +22,7 @@
 
 namespace jbboehr\PhpBenchPerfidious\Executor;
 
+use InvalidArgumentException;
 use jbboehr\PhpBenchPerfidious\PerfidiousExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use PhpBench\Executor\Benchmark\TemplateExecutor;
@@ -33,6 +34,7 @@ use PhpBench\Registry\Config;
 use PhpBench\Remote\Exception\ScriptErrorException;
 use PhpBench\Remote\Launcher;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use UnexpectedValueException;
 
 class PerfidiousRemoteExecutor extends TemplateExecutor
 {
@@ -69,13 +71,19 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
             'metrics' => var_export($this->metrics, true),
         ]);
 
-        // @infection-ignore-all Payload::replaceTokens() passes this array straight
-        // into str_replace()'s $replace parameter, which PHP coerces to string
-        // per-element regardless -- removing this map/cast is behavior-equivalent.
-        return array_map(function (mixed $value): string {
-            assert(is_scalar($value));
-            return (string) $value;
-        }, $tokens);
+        $stringTokens = [];
+        foreach ($tokens as $key => $value) {
+            if (!is_scalar($value)) {
+                throw new UnexpectedValueException(sprintf(
+                    'Remote template token "%s" must be scalar, got %s',
+                    $key,
+                    get_debug_type($value),
+                ));
+            }
+            $stringTokens[$key] = (string) $value;
+        }
+
+        return $stringTokens;
     }
 
     public function execute(ExecutionContext $context, Config $config): ExecutionResults
@@ -84,24 +92,41 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
         $payload = $this->launcher->payload($this->templatePath, $tokens, $context->getTimeOut());
 
         $phpConfigRaw = $config[self::OPTION_PHP_CONFIG] ?? [];
-        assert(is_array($phpConfigRaw));
+        if (!is_array($phpConfigRaw)) {
+            throw new InvalidArgumentException(sprintf(
+                'Executor option "%s" must be an array, got %s',
+                self::OPTION_PHP_CONFIG,
+                get_debug_type($phpConfigRaw),
+            ));
+        }
 
         $phpConfig = ['max_execution_time' => 0];
         foreach ($phpConfigRaw as $key => $value) {
-            assert(is_string($key));
+            if (!is_string($key)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Executor option "%s" keys must be strings, got %s key',
+                    self::OPTION_PHP_CONFIG,
+                    get_debug_type($key),
+                ));
+            }
 
             if (is_array($value)) {
                 $scalarList = [];
-                foreach ($value as $item) {
-                    assert(is_bool($item) || is_float($item) || is_int($item) || is_string($item));
-                    $scalarList[] = $item;
+                foreach ($value as $itemKey => $item) {
+                    $scalarList[] = self::requirePhpConfigScalar(
+                        $item,
+                        self::OPTION_PHP_CONFIG . '.' . $key . '.' . $itemKey,
+                    );
                 }
                 $phpConfig[$key] = $scalarList;
                 continue;
             }
 
-            assert(is_bool($value) || is_float($value) || is_int($value) || is_string($value));
-            $phpConfig[$key] = $value;
+            $phpConfig[$key] = self::requirePhpConfigScalar(
+                $value,
+                self::OPTION_PHP_CONFIG . '.' . $key,
+                'scalar or an array of scalars',
+            );
         }
         $payload->mergePhpConfig($phpConfig);
 
@@ -112,15 +137,21 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
                 "Benchmarking script exited with code %s\n\n%s",
                 $error->getExitCode() ?? 'unknown',
                 $error->getMessage()
-            ));
-        }
-
-        $buffer = $result['buffer'] ?? null;
-        if (is_string($buffer) && '' !== $buffer) {
-            throw new \RuntimeException(sprintf('Benchmark made some noise: %s', $buffer));
+            ), 0, $error);
         }
 
         try {
+            $buffer = self::requireRemoteValue($result, 'buffer');
+            if (!is_string($buffer)) {
+                throw new UnexpectedValueException(sprintf(
+                    'Remote result key "buffer" must be a string, got %s',
+                    get_debug_type($buffer),
+                ));
+            }
+            if ('' !== $buffer) {
+                throw new \RuntimeException(sprintf('Benchmark made some noise: %s', $buffer));
+            }
+
             return $this->decodeResults($context, $result);
         } catch (ExecutionError $e) {
             throw $e;
@@ -130,7 +161,7 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
                 $e->getMessage(),
                 get_class($e),
                 $e->getTraceAsString(),
-            ));
+            ), 0, $e);
         }
     }
 
@@ -139,28 +170,33 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
      */
     private function decodeResults(ExecutionContext $context, array $result): ExecutionResults
     {
-        $memRaw = $result['mem'];
-        assert(is_array($memRaw));
-        $mem = [];
-        foreach ($memRaw as $key => $value) {
-            assert(is_string($key));
-            $mem[$key] = $value;
-        }
+        $memRaw = self::requireRemoteArray($result, 'mem');
+        $mem = [
+            'peak' => self::requireRemoteInt($memRaw, 'peak', 'mem'),
+            'real' => self::requireRemoteInt($memRaw, 'real', 'mem'),
+            'final' => self::requireRemoteInt($memRaw, 'final', 'mem'),
+        ];
 
-        $perf = $result['perf'];
-        assert(is_array($perf));
-
-        $timeRunning = $perf['timeRunning'];
-        $timeEnabled = $perf['timeEnabled'];
-        $rawValuesRaw = $perf['rawValues'];
-        assert(is_int($timeRunning));
-        assert(is_int($timeEnabled));
-        assert(is_array($rawValuesRaw));
+        $perf = self::requireRemoteArray($result, 'perf');
+        $timeRunning = self::requireRemoteInt($perf, 'timeRunning', 'perf');
+        $timeEnabled = self::requireRemoteInt($perf, 'timeEnabled', 'perf');
+        $rawValuesRaw = self::requireRemoteArray($perf, 'rawValues', 'perf');
 
         $rawValues = [];
         foreach ($rawValuesRaw as $eventName => $count) {
-            assert(is_string($eventName));
-            assert(is_int($count) || is_float($count));
+            if (!is_string($eventName)) {
+                throw new UnexpectedValueException(sprintf(
+                    'Remote result key "perf.rawValues" must contain string event names, got %s key',
+                    get_debug_type($eventName),
+                ));
+            }
+            if (!is_int($count) && !is_float($count)) {
+                throw new UnexpectedValueException(sprintf(
+                    'Remote result key "perf.rawValues.%s" must be int or float, got %s',
+                    $eventName,
+                    get_debug_type($count),
+                ));
+            }
             $rawValues[$eventName] = $count;
         }
 
@@ -189,5 +225,72 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
         }
 
         return ExecutionResults::fromResults(...$results);
+    }
+
+    private static function requirePhpConfigScalar(
+        mixed $value,
+        string $path,
+        string $expected = 'scalar',
+    ): bool|float|int|string {
+        if (is_bool($value) || is_float($value) || is_int($value) || is_string($value)) {
+            return $value;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Executor option "%s" must be %s, got %s',
+            $path,
+            $expected,
+            get_debug_type($value),
+        ));
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     */
+    private static function requireRemoteValue(array $values, string $key, string $parent = ''): mixed
+    {
+        $path = '' === $parent ? $key : $parent . '.' . $key;
+        if (!array_key_exists($key, $values)) {
+            throw new UnexpectedValueException(sprintf('Remote result is missing required key "%s"', $path));
+        }
+
+        return $values[$key];
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     * @return array<array-key, mixed>
+     */
+    private static function requireRemoteArray(array $values, string $key, string $parent = ''): array
+    {
+        $value = self::requireRemoteValue($values, $key, $parent);
+        if (!is_array($value)) {
+            $path = '' === $parent ? $key : $parent . '.' . $key;
+            throw new UnexpectedValueException(sprintf(
+                'Remote result key "%s" must be an array, got %s',
+                $path,
+                get_debug_type($value),
+            ));
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<array-key, mixed> $values
+     */
+    private static function requireRemoteInt(array $values, string $key, string $parent = ''): int
+    {
+        $value = self::requireRemoteValue($values, $key, $parent);
+        if (!is_int($value)) {
+            $path = '' === $parent ? $key : $parent . '.' . $key;
+            throw new UnexpectedValueException(sprintf(
+                'Remote result key "%s" must be an int, got %s',
+                $path,
+                get_debug_type($value),
+            ));
+        }
+
+        return $value;
     }
 }
