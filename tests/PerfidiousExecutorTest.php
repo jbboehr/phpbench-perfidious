@@ -22,6 +22,7 @@
 
 namespace jbboehr\PhpBenchPerfidious\Tests;
 
+use InvalidArgumentException;
 use jbboehr\PhpBenchPerfidious\PerfidiousExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark;
@@ -100,6 +101,30 @@ class PerfidiousExecutorTest extends TestCase
         $results = $executor->execute($this->makeContext('passes'), new Config('test', []));
 
         $this->assertCount(0, $results->byType(TimeResult::class));
+    }
+
+    public function testWithMetricsRejectsMultipleRecognizedTimeEvents(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('At most one recognized time event is supported');
+
+        PerfidiousExecutor::withMetrics([
+            'perf::PERF_COUNT_SW_CPU_CLOCK',
+            'perf::PERF_COUNT_SW_TASK_CLOCK',
+        ]);
+    }
+
+    public function testExecuteRejectsMultipleTimeEventsReturnedByAHandle(): void
+    {
+        $handle = new FakeHandle(values: [
+            'perf::PERF_COUNT_SW_CPU_CLOCK' => 1_000_000,
+            'perf::PERF_COUNT_SW_TASK_CLOCK' => 2_000_000,
+        ]);
+
+        $this->expectException(ExecutionError::class);
+        $this->expectExceptionMessage('At most one recognized time event is supported');
+
+        (new PerfidiousExecutor($handle))->execute($this->makeContext('passes'), new Config('test', []));
     }
 
     public function testExceptionFromBenchmarkMethodIsWrappedAsExecutionError(): void

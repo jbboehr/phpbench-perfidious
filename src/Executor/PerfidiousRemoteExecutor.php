@@ -29,7 +29,6 @@ use PhpBench\Executor\Exception\ExecutionError;
 use PhpBench\Executor\ExecutionContext;
 use PhpBench\Executor\ExecutionResults;
 use PhpBench\Model\Result\MemoryResult;
-use PhpBench\Model\Result\TimeResult;
 use PhpBench\Registry\Config;
 use PhpBench\Remote\Exception\ScriptErrorException;
 use PhpBench\Remote\Launcher;
@@ -49,6 +48,7 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
         private readonly array $metrics = PerfidiousExecutor::DEFAULT_METRICS,
         private readonly string $templatePath = self::DEFAULT_TEMPLATE_PATH,
     ) {
+        PerfidiousExecutor::assertAtMostOneTimeEvent($metrics);
         parent::__construct($launcher, $templatePath);
     }
 
@@ -178,12 +178,14 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
 
         // Add a time result if available, matching PerfidiousExecutor's own methodology
         // rather than the wall-clock time PHPBench's stock remote executors use.
-        foreach ($rawValues as $eventName => $count) {
-            if (true === (PerfidiousExecutor::TIME_EVENTS[$eventName] ?? false)) {
-                $adjusted = PerfidiousExecutor::adjustedTime($count, $timeEnabled, $timeRunning);
-                $results[] = new TimeResult($adjusted, $context->getRevolutions());
-                break;
-            }
+        $timeResult = PerfidiousExecutor::createTimeResult(
+            $rawValues,
+            $timeEnabled,
+            $timeRunning,
+            $context->getRevolutions(),
+        );
+        if (null !== $timeResult) {
+            $results[] = $timeResult;
         }
 
         return ExecutionResults::fromResults(...$results);

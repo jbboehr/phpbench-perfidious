@@ -22,6 +22,7 @@
 
 namespace jbboehr\PhpBenchPerfidious;
 
+use InvalidArgumentException;
 use jbboehr\PhpBenchPerfidious\Perf\HandleInterface;
 use jbboehr\PhpBenchPerfidious\Perf\NativeHandle;
 use PhpBench\Executor\BenchmarkExecutorInterface;
@@ -61,8 +62,11 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
      */
     public static function withMetrics(?array $metrics = null, ?string $bootstrap = null): self
     {
+        $metrics ??= self::DEFAULT_METRICS;
+        self::assertAtMostOneTimeEvent($metrics);
+
         return new self(
-            handle: new NativeHandle($metrics ?? self::DEFAULT_METRICS),
+            handle: new NativeHandle($metrics),
             bootstrap: $bootstrap,
         );
     }
@@ -82,6 +86,52 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
     public static function adjustedTime(int|float $count, int $timeEnabled, int $timeRunning): int
     {
         return (int) ($count * $timeEnabled / $timeRunning / 1e3);
+    }
+
+    /**
+     * @param list<string> $eventNames
+     */
+    public static function assertAtMostOneTimeEvent(array $eventNames): void
+    {
+        $timeEvents = array_values(array_filter(
+            $eventNames,
+            static fn (string $eventName): bool => true === (self::TIME_EVENTS[$eventName] ?? false),
+        ));
+
+        if (count($timeEvents) <= 1) {
+            return;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'At most one recognized time event is supported; got "%s"',
+            implode('", "', $timeEvents),
+        ));
+    }
+
+    /**
+     * @param array<string, int|float> $rawValues
+     */
+    public static function createTimeResult(
+        array $rawValues,
+        int $timeEnabled,
+        int $timeRunning,
+        int $revolutions,
+    ): ?TimeResult {
+        $eventNames = array_keys($rawValues);
+        self::assertAtMostOneTimeEvent($eventNames);
+
+        foreach ($rawValues as $eventName => $count) {
+            if (true !== (self::TIME_EVENTS[$eventName] ?? false)) {
+                continue;
+            }
+
+            return new TimeResult(
+                self::adjustedTime($count, $timeEnabled, $timeRunning),
+                $revolutions,
+            );
+        }
+
+        return null;
     }
 
     /**
@@ -158,12 +208,14 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
             rawValues: $rr->values,
         );
 
-        // Add a time result if available
-        foreach ($rr->values as $eventName => $count) {
-            if (true === (self::TIME_EVENTS[$eventName] ?? false)) {
-                $adjusted = self::adjustedTime($count, $rr->timeEnabled, $rr->timeRunning);
-                $results[] = new TimeResult($adjusted, $context->getRevolutions());
-            }
+        $timeResult = self::createTimeResult(
+            $rr->values,
+            $rr->timeEnabled,
+            $rr->timeRunning,
+            $context->getRevolutions(),
+        );
+        if (null !== $timeResult) {
+            $results[] = $timeResult;
         }
 
         foreach ($context->getAfterMethods() as $afterMethod) {

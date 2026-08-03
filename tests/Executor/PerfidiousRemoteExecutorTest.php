@@ -22,6 +22,7 @@
 
 namespace jbboehr\PhpBenchPerfidious\Tests\Executor;
 
+use InvalidArgumentException;
 use jbboehr\PhpBenchPerfidious\Executor\PerfidiousRemoteExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark;
@@ -204,6 +205,17 @@ class PerfidiousRemoteExecutorTest extends TestCase
         $this->assertSame([], $resolved[PerfidiousRemoteExecutor::OPTION_PHP_CONFIG]);
 
         $this->assertTrue($resolved[PerfidiousRemoteExecutor::OPTION_SAFE_PARAMETERS]);
+    }
+
+    public function testConstructorRejectsMultipleRecognizedTimeEvents(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('At most one recognized time event is supported');
+
+        new PerfidiousRemoteExecutor(new Launcher(), metrics: [
+            'perf::PERF_COUNT_SW_CPU_CLOCK',
+            'perf::TASK-CLOCK',
+        ]);
     }
 
     public function testPhpConfigOptionForwardsScalarSettingToChildProcess(): void
