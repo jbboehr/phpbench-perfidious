@@ -191,10 +191,7 @@
     "nix-phps_2": {
       "inputs": {
         "flake-compat": "flake-compat_2",
-        "nixpkgs": [
-          "perfidious",
-          "nixpkgs"
-        ],
+        "nixpkgs": "nixpkgs_2",
         "utils": "utils_2"
       },
       "locked": {
@@ -243,6 +240,22 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1787631388,
+        "narHash": "sha256-vMiXptXarfSdJb1Gkc+FYVOAibuBRj7qxGa8z68q1Uw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "ac6b2166e7a9375683b8e98f860f273222337b16",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "perfidious": {
       "inputs": {
         "flake-utils": [
@@ -261,15 +274,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1785654964,
-        "narHash": "sha256-w7oogFyTI2pzUUIib7SCKaJ5/2bDi3Qi6/qG8dGifUY=",
+        "lastModified": 1788276165,
+        "narHash": "sha256-yHz+2qIdGakM0vKw2auorDmO9QTebtW+uPoZdbgRq2w=",
         "owner": "jbboehr",
         "repo": "php-perfidious",
-        "rev": "c646bd1313214dc86c9101fe459784ce0e887b6f",
+        "rev": "1f816b2390650cb025d2f0ba8d4530834f3a4912",
         "type": "github"
       },
       "original": {
         "owner": "jbboehr",
+        "ref": "develop",
         "repo": "php-perfidious",
         "type": "github"
       }
