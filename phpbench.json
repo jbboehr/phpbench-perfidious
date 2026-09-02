@@ -2,15 +2,15 @@
     "$schema":"./vendor/phpbench/phpbench/phpbench.schema.json",
     "runner.bootstrap": "tests/bootstrap.php",
     "runner.path": "tests/Benchmark",
-    "runner.executor": "perfidious",
-    "runner.progress": "perfidious",
+    "runner.executor": "perfidious-linux",
+    "runner.progress": "perfidious-linux",
     "core.profiles": {
-        "perfidious-remote": {
-            "runner.executor": "perfidious-remote"
+        "perfidious-linux-remote": {
+            "runner.executor": "perfidious-linux-remote"
         },
-        "perfidious-remote-ci": {
-            "runner.executor": "perfidious-remote",
-            "perfidious.metrics": [
+        "perfidious-linux-remote-ci": {
+            "runner.executor": "perfidious-linux-remote",
+            "perfidious.linux.metrics": [
                 "perf::PERF_COUNT_SW_CPU_CLOCK"
             ]
         }
@@ -27,7 +27,7 @@
             "generator": "perfidious"
         }
     },
-    "perfidious.metrics": [
+    "perfidious.linux.metrics": [
         "perf::PERF_COUNT_SW_CPU_CLOCK",
         "perf::PERF_COUNT_HW_INSTRUCTIONS",
         "perf::PERF_COUNT_SW_PAGE_FAULTS",

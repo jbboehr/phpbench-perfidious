@@ -64,7 +64,7 @@ class PerfidiousExtensionTest extends TestCase
         ], [
             // Software-only metric: reliable in sandboxed/virtualized CI environments
             // where hardware PMU counters are not available.
-            PerfidiousExtension::PARAM_PERFIDIOUS_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK'],
+            PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK'],
             // Needed for PerfidiousRemoteExecutor's child process to autoload fixture classes.
             RunnerExtension::PARAM_BOOTSTRAP => __DIR__ . '/bootstrap.php',
         ]);
@@ -80,7 +80,7 @@ class PerfidiousExtensionTest extends TestCase
 
         $this->assertSame(
             PerfidiousExecutor::DEFAULT_METRICS,
-            $container->getParameter(PerfidiousExtension::PARAM_PERFIDIOUS_METRICS)
+            $container->getParameter(PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS)
         );
         $this->assertIsString($container->getParameter(PerfidiousExtension::PARAM_PROGRESS_SUMMARY_FORMAT));
         $this->assertIsString($container->getParameter(PerfidiousExtension::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT));
@@ -94,7 +94,7 @@ class PerfidiousExtensionTest extends TestCase
         $this->expectException(InvalidOptionsException::class);
 
         $resolver->resolve([
-            PerfidiousExtension::PARAM_PERFIDIOUS_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK', 42],
+            PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK', 42],
         ]);
     }
 
@@ -110,25 +110,25 @@ class PerfidiousExtensionTest extends TestCase
         ]);
     }
 
-    public function testRegistersExecutorUnderPerfidiousTag(): void
+    public function testRegistersExecutorUnderPerfidiousLinuxTag(): void
     {
         $container = $this->makeContainer();
         $tagged = $container->getServiceIdsForTag(RunnerExtension::TAG_EXECUTOR);
 
         $this->assertArrayHasKey(PerfidiousExecutor::class . '.composite', $tagged);
-        $this->assertSame('perfidious', $tagged[PerfidiousExecutor::class . '.composite']['name']);
+        $this->assertSame('perfidious-linux', $tagged[PerfidiousExecutor::class . '.composite']['name']);
 
         $executor = $container->get(PerfidiousExecutor::class . '.composite');
         $this->assertInstanceOf(CompositeExecutor::class, $executor);
     }
 
-    public function testRegistersProgressLoggerUnderPerfidiousTag(): void
+    public function testRegistersProgressLoggerUnderPerfidiousLinuxTag(): void
     {
         $container = $this->makeContainer();
         $tagged = $container->getServiceIdsForTag(RunnerExtension::TAG_PROGRESS_LOGGER);
 
         $this->assertArrayHasKey(PerfidiousProgressLogger::class, $tagged);
-        $this->assertSame('perfidious', $tagged[PerfidiousProgressLogger::class]['name']);
+        $this->assertSame('perfidious-linux', $tagged[PerfidiousProgressLogger::class]['name']);
 
         $logger = $container->get(PerfidiousProgressLogger::class);
         $this->assertInstanceOf(PerfidiousProgressLogger::class, $logger);
@@ -159,13 +159,13 @@ class PerfidiousExtensionTest extends TestCase
         $this->assertInstanceOf(PerfidiousExecutor::class, $executor);
     }
 
-    public function testRegistersRemoteExecutorUnderPerfidiousRemoteTag(): void
+    public function testRegistersRemoteExecutorUnderPerfidiousLinuxRemoteTag(): void
     {
         $container = $this->makeContainer();
         $tagged = $container->getServiceIdsForTag(RunnerExtension::TAG_EXECUTOR);
 
         $this->assertArrayHasKey(PerfidiousRemoteExecutor::class . '.composite', $tagged);
-        $this->assertSame('perfidious-remote', $tagged[PerfidiousRemoteExecutor::class . '.composite']['name']);
+        $this->assertSame('perfidious-linux-remote', $tagged[PerfidiousRemoteExecutor::class . '.composite']['name']);
 
         $executor = $container->get(PerfidiousRemoteExecutor::class . '.composite');
         $this->assertInstanceOf(CompositeExecutor::class, $executor);

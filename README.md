@@ -6,11 +6,11 @@ and software performance counters (instructions, cycles, cache misses, page faul
 
 It provides:
 
-- a benchmark **executor** (`perfidious`) that wraps each variant's revolutions in a `perf_event_open` handle, records
+- a benchmark **executor** (`perfidious-linux`) that wraps each variant's revolutions in a `perf_event_open` handle, records
   the counter values, and supplies PHPBench timing data when a supported clock event is configured;
-- a second **executor** (`perfidious-remote`) that does the same thing but in an isolated subprocess per variant,
+- a second **executor** (`perfidious-linux-remote`) that does the same thing but in an isolated subprocess per variant,
   like PHPBench's own built-in `remote` executor — see [Remote execution](#remote-execution) below;
-- a **progress logger** (`perfidious`) that adds an instructions-per-iteration summary to PHPBench's verbose progress
+- a **progress logger** (`perfidious-linux`) that adds an instructions-per-iteration summary to PHPBench's verbose progress
   output;
 - a **report generator** (`perfidious`) that renders the raw and per-revolution-normalized counter values in a table.
 
@@ -39,7 +39,7 @@ already in a Nix environment, this repo's own
 [`flake.nix`](https://github.com/jbboehr/phpbench-perfidious/blob/master/flake.nix) devShells
 (`nix develop .#php82`, etc.) give you a PHP build with the extension already compiled in.
 
-If the extension isn't loaded, selecting the `perfidious` executor or calling anything under the `Perfidious\`
+If the extension isn't loaded, selecting the `perfidious-linux` executor or calling anything under the `Perfidious\`
 namespace will fail with a PHP fatal error (`Call to undefined function Perfidious\open()`) rather than a friendly
 message — check `php -m | grep perfidious` first if you hit that.
 
@@ -52,7 +52,7 @@ are standard PHPBench settings; adjust them to match your project:
 {
     "runner.bootstrap": "vendor/autoload.php",
     "runner.path": "tests/Benchmark",
-    "runner.executor": "perfidious",
+    "runner.executor": "perfidious-linux",
     "core.extensions": [
         "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
     ],
@@ -61,21 +61,21 @@ are standard PHPBench settings; adjust them to match your project:
             "generator": "perfidious"
         }
     },
-    "perfidious.metrics": [
+    "perfidious.linux.metrics": [
         "perf::PERF_COUNT_SW_CPU_CLOCK",
         "perf::PERF_COUNT_HW_INSTRUCTIONS"
     ]
 }
 ```
 
-- `perfidious.metrics` accepts any event name understood by `Perfidious\open()` (see the `ext-perfidious` README for
+- `perfidious.linux.metrics` accepts any event name understood by `Perfidious\open()` (see the `ext-perfidious` README for
   the full list, or `phpbench.json`'s own schema for the format). Defaults to
   `perf::PERF_COUNT_SW_CPU_CLOCK` and `perf::PERF_COUNT_HW_INSTRUCTIONS` if omitted.
 - Hardware counters (anything under `perf::PERF_COUNT_HW_*`) require host access to the CPU's performance-monitoring
   unit. They are commonly unavailable in containers and nested/cloud CI runners; meaningful hardware-counter
   benchmarks must run on a PMU-enabled host.
-- Set `"runner.progress": "perfidious"` to add the instructions-per-iteration progress summary. This logger requires
-  `perf::PERF_COUNT_HW_INSTRUCTIONS` to be present in `perfidious.metrics`.
+- Set `"runner.progress": "perfidious-linux"` to add the instructions-per-iteration progress summary. This logger requires
+  `perf::PERF_COUNT_HW_INSTRUCTIONS` to be present in `perfidious.linux.metrics`.
 
 GitHub-hosted runners do not expose the hardware PMU events used in real benchmarks. This repository's end-to-end CI
 test therefore falls back to `perf::PERF_COUNT_SW_CPU_CLOCK` and disables the instruction-specific progress logger. CI
@@ -110,11 +110,11 @@ unnormalized raw counter total for a metric is also available under a `<metric>_
 
 ## Remote execution
 
-The default `perfidious` executor runs every benchmark iteration, across every subject in the whole
+The default `perfidious-linux` executor runs every benchmark iteration, across every subject in the whole
 `phpbench run`, inside a single long-lived PHP process — there's no isolation between benchmarks (opcache/JIT
 warmup and memory state carry over from one subject to the next).
 
-`perfidious-remote` runs each variant in its own freshly spawned subprocess instead — the same approach PHPBench's
+`perfidious-linux-remote` runs each variant in its own freshly spawned subprocess instead — the same approach PHPBench's
 own built-in `remote` executor uses — while still collecting perf counters (each subprocess opens its own handle).
 This is opt-in; it isn't PHPBench's builtin default, and this repo's own `phpbench.json` doesn't default to it either.
 Define a profile that selects it reliably:
@@ -122,29 +122,29 @@ Define a profile that selects it reliably:
 ```json
 {
     "core.profiles": {
-        "perfidious-remote": {
-            "runner.executor": "perfidious-remote"
+        "perfidious-linux-remote": {
+            "runner.executor": "perfidious-linux-remote"
         }
     }
 }
 ```
 
 ```shell
-vendor/bin/phpbench run --profile=perfidious-remote --report=perfidious
+vendor/bin/phpbench run --profile=perfidious-linux-remote --report=perfidious
 ```
 
 Use the profile when `runner.executor` is already set: PHPBench 1.x's configuration precedence can otherwise
 retain that configured executor when `--executor` is passed directly. Alternatively, set
-`"runner.executor": "perfidious-remote"` in your own `phpbench.json`. It uses the same `perfidious.metrics`
+`"runner.executor": "perfidious-linux-remote"` in your own `phpbench.json`. It uses the same `perfidious.linux.metrics`
 configuration key as the in-process executor.
 
-Trade-offs versus `perfidious`:
+Trade-offs versus `perfidious-linux`:
 
 - adds a real `MemoryResult` (memory usage per variant) — meaningless for the in-process executor, since memory
   would accumulate across every subject in the run, but meaningful here since each variant gets a fresh process;
-- has subprocess-spawn overhead per variant, so wall-clock-sensitive comparisons against `perfidious` aren't
+- has subprocess-spawn overhead per variant, so wall-clock-sensitive comparisons against `perfidious-linux` aren't
   apples-to-apples;
-- like the in-process executor, only produces a `TimeResult` if `perfidious.metrics` includes a recognized
+- like the in-process executor, only produces a `TimeResult` if `perfidious.linux.metrics` includes a recognized
   time-counter event (e.g. the default `perf::PERF_COUNT_SW_CPU_CLOCK`) — if you configure only, say,
   `perf::PERF_COUNT_HW_INSTRUCTIONS`, no `TimeResult` is emitted and PHPBench's built-in stats/aggregate reporting
   won't have timing data to work with.

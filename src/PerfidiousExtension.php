@@ -47,18 +47,18 @@ class PerfidiousExtension implements ExtensionInterface
 {
     final public const PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT = 'perfidious.progress_summary_baseline_format';
     final public const PARAM_PROGRESS_SUMMARY_FORMAT = 'perfidious.progress_summary_variant_format';
-    final public const PARAM_PERFIDIOUS_METRICS = 'perfidious.metrics';
+    final public const PARAM_PERFIDIOUS_LINUX_METRICS = 'perfidious.linux.metrics';
 
     public function configure(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            self::PARAM_PERFIDIOUS_METRICS => PerfidiousExecutor::DEFAULT_METRICS,
+            self::PARAM_PERFIDIOUS_LINUX_METRICS => PerfidiousExecutor::DEFAULT_METRICS,
             self::PARAM_PROGRESS_SUMMARY_FORMAT => VariantSummaryFormatter::DEFAULT_FORMAT,
             self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT => VariantSummaryFormatter::BASELINE_FORMAT,
         ]);
-        $resolver->setAllowedTypes(self::PARAM_PERFIDIOUS_METRICS, 'array');
+        $resolver->setAllowedTypes(self::PARAM_PERFIDIOUS_LINUX_METRICS, 'array');
         $resolver->setAllowedValues(
-            self::PARAM_PERFIDIOUS_METRICS,
+            self::PARAM_PERFIDIOUS_LINUX_METRICS,
             static function (array $metrics): bool {
                 foreach ($metrics as $metric) {
                     if (!is_string($metric)) {
@@ -83,7 +83,7 @@ class PerfidiousExtension implements ExtensionInterface
                 $executor,
                 new ErrorHandlingExecutorDecorator($localMethodExecutor),
             );
-        }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious']]);
+        }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-linux']]);
 
         $container->register(PerfidiousExecutor::class, static function (Container $container): PerfidiousExecutor {
             $bootstrap = $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP);
@@ -95,7 +95,7 @@ class PerfidiousExtension implements ExtensionInterface
                 ));
             }
 
-            $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_METRICS);
+            $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_LINUX_METRICS);
 
             return PerfidiousExecutor::withMetrics(
                 metrics: $metrics,
@@ -111,11 +111,11 @@ class PerfidiousExtension implements ExtensionInterface
                 $executor,
                 new ErrorHandlingExecutorDecorator($remoteMethodExecutor),
             );
-        }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-remote']]);
+        }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-linux-remote']]);
 
         $container->register(PerfidiousRemoteExecutor::class, static function (Container $container): PerfidiousRemoteExecutor {
             $launcher = self::get($container, Launcher::class);
-            $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_METRICS);
+            $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_LINUX_METRICS);
 
             return new PerfidiousRemoteExecutor(
                 launcher: $launcher,
@@ -141,7 +141,7 @@ class PerfidiousExtension implements ExtensionInterface
             );
         }, [
             RunnerExtension::TAG_PROGRESS_LOGGER => [
-                'name' => 'perfidious',
+                'name' => 'perfidious-linux',
             ]
         ]);
 
