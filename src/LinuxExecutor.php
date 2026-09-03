@@ -33,7 +33,7 @@ use PhpBench\Model\Result\TimeResult;
 use PhpBench\Registry\Config;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
-class PerfidiousExecutor implements BenchmarkExecutorInterface
+class LinuxExecutor implements BenchmarkExecutorInterface
 {
     public const DEFAULT_METRICS = [
         'perf::PERF_COUNT_SW_CPU_CLOCK',
@@ -80,7 +80,7 @@ class PerfidiousExecutor implements BenchmarkExecutorInterface
      * microseconds, adjusted for multiplexing (timeEnabled/timeRunning) the
      * kernel may have applied when more counters were requested than the
      * CPU has hardware slots for. Pulled out into a pure function -- shared
-     * with PerfidiousRemoteExecutor -- so it can be unit tested with fixed
+     * with LinuxRemoteExecutor -- so it can be unit tested with fixed
      * inputs instead of relying on real (non-deterministic) perf timings.
      */
     public static function adjustedTime(int|float $count, int $timeEnabled, int $timeRunning): int

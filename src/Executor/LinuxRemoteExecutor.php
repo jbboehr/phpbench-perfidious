@@ -23,7 +23,7 @@
 namespace jbboehr\PhpBenchPerfidious\Executor;
 
 use InvalidArgumentException;
-use jbboehr\PhpBenchPerfidious\PerfidiousExecutor;
+use jbboehr\PhpBenchPerfidious\LinuxExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use PhpBench\Executor\Benchmark\TemplateExecutor;
 use PhpBench\Executor\Exception\ExecutionError;
@@ -36,9 +36,9 @@ use PhpBench\Remote\Launcher;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use UnexpectedValueException;
 
-class PerfidiousRemoteExecutor extends TemplateExecutor
+class LinuxRemoteExecutor extends TemplateExecutor
 {
-    private const DEFAULT_TEMPLATE_PATH = __DIR__ . '/template/perfidious-remote.template';
+    private const DEFAULT_TEMPLATE_PATH = __DIR__ . '/template/linux-remote.template';
 
     /**
      * @param list<string> $metrics
@@ -47,10 +47,10 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
         // TemplateExecutor's own $launcher/$templatePath are private to that class (constructor
         // property promotion), so execute() below needs its own copies to work with.
         private readonly Launcher $launcher,
-        private readonly array $metrics = PerfidiousExecutor::DEFAULT_METRICS,
+        private readonly array $metrics = LinuxExecutor::DEFAULT_METRICS,
         private readonly string $templatePath = self::DEFAULT_TEMPLATE_PATH,
     ) {
-        PerfidiousExecutor::assertAtMostOneTimeEvent($metrics);
+        LinuxExecutor::assertAtMostOneTimeEvent($metrics);
         parent::__construct($launcher, $templatePath);
     }
 
@@ -200,7 +200,7 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
             $rawValues[$eventName] = $count;
         }
 
-        PerfidiousExecutor::assertCountersRan($timeRunning);
+        LinuxExecutor::assertCountersRan($timeRunning);
 
         $results = [
             MemoryResult::fromArray($mem),
@@ -212,9 +212,9 @@ class PerfidiousRemoteExecutor extends TemplateExecutor
             ),
         ];
 
-        // Add a time result if available, matching PerfidiousExecutor's own methodology
+        // Add a time result if available, matching LinuxExecutor's own methodology
         // rather than the wall-clock time PHPBench's stock remote executors use.
-        $timeResult = PerfidiousExecutor::createTimeResult(
+        $timeResult = LinuxExecutor::createTimeResult(
             $rawValues,
             $timeEnabled,
             $timeRunning,

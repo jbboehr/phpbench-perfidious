@@ -23,7 +23,7 @@
 namespace jbboehr\PhpBenchPerfidious\Tests;
 
 use InvalidArgumentException;
-use jbboehr\PhpBenchPerfidious\PerfidiousExecutor;
+use jbboehr\PhpBenchPerfidious\LinuxExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\FakeHandle;
@@ -33,7 +33,7 @@ use PhpBench\Model\Result\TimeResult;
 use PhpBench\Registry\Config;
 use PHPUnit\Framework\TestCase;
 
-class PerfidiousExecutorTest extends TestCase
+class LinuxExecutorTest extends TestCase
 {
     protected function setUp(): void
     {
@@ -41,11 +41,11 @@ class PerfidiousExecutorTest extends TestCase
         ExecutorFixtureBenchmark::$argumentCounts = [];
     }
 
-    private function makeExecutor(): PerfidiousExecutor
+    private function makeExecutor(): LinuxExecutor
     {
         // Software-only metric: reliable in sandboxed/virtualized CI environments
         // where hardware PMU counters are not available.
-        return PerfidiousExecutor::withMetrics(metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK']);
+        return LinuxExecutor::withMetrics(metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK']);
     }
 
     /**
@@ -88,7 +88,7 @@ class PerfidiousExecutorTest extends TestCase
 
     public function testTimeResultIsAddedWhenMetricIsARecognizedTimeEvent(): void
     {
-        // perf::PERF_COUNT_SW_CPU_CLOCK is in PerfidiousExecutor::TIME_EVENTS.
+        // perf::PERF_COUNT_SW_CPU_CLOCK is in LinuxExecutor::TIME_EVENTS.
         $results = $this->makeExecutor()->execute($this->makeContext('passes'), new Config('test', []));
 
         $this->assertInstanceOf(TimeResult::class, $results->byType(TimeResult::class)->first());
@@ -96,7 +96,7 @@ class PerfidiousExecutorTest extends TestCase
 
     public function testTimeResultIsNotAddedWhenNoMetricIsARecognizedTimeEvent(): void
     {
-        $executor = PerfidiousExecutor::withMetrics(metrics: ['perf::PERF_COUNT_SW_PAGE_FAULTS']);
+        $executor = LinuxExecutor::withMetrics(metrics: ['perf::PERF_COUNT_SW_PAGE_FAULTS']);
 
         $results = $executor->execute($this->makeContext('passes'), new Config('test', []));
 
@@ -108,7 +108,7 @@ class PerfidiousExecutorTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('At most one recognized time event is supported');
 
-        PerfidiousExecutor::withMetrics([
+        LinuxExecutor::withMetrics([
             'perf::PERF_COUNT_SW_CPU_CLOCK',
             'perf::PERF_COUNT_SW_TASK_CLOCK',
         ]);
@@ -124,7 +124,7 @@ class PerfidiousExecutorTest extends TestCase
         $this->expectException(ExecutionError::class);
         $this->expectExceptionMessage('At most one recognized time event is supported');
 
-        (new PerfidiousExecutor($handle))->execute($this->makeContext('passes'), new Config('test', []));
+        (new LinuxExecutor($handle))->execute($this->makeContext('passes'), new Config('test', []));
     }
 
     public function testExceptionFromBenchmarkMethodIsWrappedAsExecutionError(): void
@@ -142,7 +142,7 @@ class PerfidiousExecutorTest extends TestCase
     public function testHandleIsDisabledWhenBenchmarkMethodThrows(): void
     {
         $handle = new FakeHandle();
-        $executor = new PerfidiousExecutor($handle);
+        $executor = new LinuxExecutor($handle);
 
         try {
             $executor->execute($this->makeContext('throwsException'), new Config('test', []));
@@ -269,7 +269,7 @@ class PerfidiousExecutorTest extends TestCase
      */
     public function testAdjustedTime(int|float $count, int $timeEnabled, int $timeRunning, int $expected): void
     {
-        $this->assertSame($expected, PerfidiousExecutor::adjustedTime($count, $timeEnabled, $timeRunning));
+        $this->assertSame($expected, LinuxExecutor::adjustedTime($count, $timeEnabled, $timeRunning));
     }
 
     /**
@@ -293,27 +293,27 @@ class PerfidiousExecutorTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('perf_events failed to run');
 
-        PerfidiousExecutor::assertCountersRan(0);
+        LinuxExecutor::assertCountersRan(0);
     }
 
     public function testAssertCountersRanThrowsWhenTimeRunningIsNegative(): void
     {
         $this->expectException(\RuntimeException::class);
 
-        PerfidiousExecutor::assertCountersRan(-1);
+        LinuxExecutor::assertCountersRan(-1);
     }
 
     public function testAssertCountersRanDoesNotThrowWhenTimeRunningIsPositive(): void
     {
         $this->expectNotToPerformAssertions();
 
-        PerfidiousExecutor::assertCountersRan(1);
+        LinuxExecutor::assertCountersRan(1);
     }
 
     public function testHandleLifecycleCallOrder(): void
     {
         $handle = new FakeHandle(values: ['perf::PERF_COUNT_SW_CPU_CLOCK' => 5_000_000]);
-        $executor = new PerfidiousExecutor($handle);
+        $executor = new LinuxExecutor($handle);
 
         $executor->execute($this->makeContext('passes', 3), new Config('test', []));
 
@@ -327,7 +327,7 @@ class PerfidiousExecutorTest extends TestCase
     public function testTimeRunningZeroFromHandleIsWrappedAsExecutionError(): void
     {
         $handle = new FakeHandle(timeRunning: 0, timeEnabled: 0);
-        $executor = new PerfidiousExecutor($handle);
+        $executor = new LinuxExecutor($handle);
 
         $this->expectException(ExecutionError::class);
 
@@ -346,7 +346,7 @@ class PerfidiousExecutorTest extends TestCase
             timeEnabled: $timeEnabled,
             values: ['perf::PERF_COUNT_SW_CPU_CLOCK' => $count],
         );
-        $executor = new PerfidiousExecutor($handle);
+        $executor = new LinuxExecutor($handle);
 
         $results = $executor->execute($this->makeContext('passes', $revolutions), new Config('test', []));
 
@@ -360,7 +360,7 @@ class PerfidiousExecutorTest extends TestCase
         $timeResult = $results->byType(TimeResult::class)->first();
         $this->assertInstanceOf(TimeResult::class, $timeResult);
         $this->assertSame(
-            PerfidiousExecutor::adjustedTime($count, $timeEnabled, $timeRunning),
+            LinuxExecutor::adjustedTime($count, $timeEnabled, $timeRunning),
             $timeResult->getNet(),
         );
     }

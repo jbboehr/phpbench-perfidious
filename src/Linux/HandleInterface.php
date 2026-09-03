@@ -25,7 +25,7 @@ namespace jbboehr\PhpBenchPerfidious\Linux;
 use Perfidious\ReadResult;
 
 /**
- * Mirrors the subset of Perfidious\Handle's API that PerfidiousExecutor
+ * Mirrors the subset of Perfidious\Handle's API that LinuxExecutor
  * uses. Handle is a `final` class from a native extension, so it can't be
  * mocked/subclassed directly -- this seam exists purely so tests can supply
  * a fake implementation instead.

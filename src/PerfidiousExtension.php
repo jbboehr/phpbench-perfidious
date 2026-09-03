@@ -22,7 +22,7 @@
 
 namespace jbboehr\PhpBenchPerfidious;
 
-use jbboehr\PhpBenchPerfidious\Executor\PerfidiousRemoteExecutor;
+use jbboehr\PhpBenchPerfidious\Executor\LinuxRemoteExecutor;
 use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
 use jbboehr\PhpBenchPerfidious\Progress\VariantSummaryFormatter;
 use jbboehr\PhpBenchPerfidious\Report\PerfidiousGenerator;
@@ -52,7 +52,7 @@ class PerfidiousExtension implements ExtensionInterface
     public function configure(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            self::PARAM_PERFIDIOUS_LINUX_METRICS => PerfidiousExecutor::DEFAULT_METRICS,
+            self::PARAM_PERFIDIOUS_LINUX_METRICS => LinuxExecutor::DEFAULT_METRICS,
             self::PARAM_PROGRESS_SUMMARY_FORMAT => VariantSummaryFormatter::DEFAULT_FORMAT,
             self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT => VariantSummaryFormatter::BASELINE_FORMAT,
         ]);
@@ -75,8 +75,8 @@ class PerfidiousExtension implements ExtensionInterface
 
     public function load(Container $container): void
     {
-        $container->register(PerfidiousExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
-            $executor = self::get($container, PerfidiousExecutor::class);
+        $container->register(LinuxExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
+            $executor = self::get($container, LinuxExecutor::class);
             $localMethodExecutor = self::get($container, LocalMethodExecutor::class);
 
             return new CompositeExecutor(
@@ -85,7 +85,7 @@ class PerfidiousExtension implements ExtensionInterface
             );
         }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-linux']]);
 
-        $container->register(PerfidiousExecutor::class, static function (Container $container): PerfidiousExecutor {
+        $container->register(LinuxExecutor::class, static function (Container $container): LinuxExecutor {
             $bootstrap = $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP);
             if (!is_string($bootstrap) && null !== $bootstrap) {
                 throw new \UnexpectedValueException(sprintf(
@@ -97,14 +97,14 @@ class PerfidiousExtension implements ExtensionInterface
 
             $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_LINUX_METRICS);
 
-            return PerfidiousExecutor::withMetrics(
+            return LinuxExecutor::withMetrics(
                 metrics: $metrics,
                 bootstrap: $bootstrap,
             );
         });
 
-        $container->register(PerfidiousRemoteExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
-            $executor = self::get($container, PerfidiousRemoteExecutor::class);
+        $container->register(LinuxRemoteExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
+            $executor = self::get($container, LinuxRemoteExecutor::class);
             $remoteMethodExecutor = self::get($container, RemoteMethodExecutor::class);
 
             return new CompositeExecutor(
@@ -113,11 +113,11 @@ class PerfidiousExtension implements ExtensionInterface
             );
         }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-linux-remote']]);
 
-        $container->register(PerfidiousRemoteExecutor::class, static function (Container $container): PerfidiousRemoteExecutor {
+        $container->register(LinuxRemoteExecutor::class, static function (Container $container): LinuxRemoteExecutor {
             $launcher = self::get($container, Launcher::class);
             $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_LINUX_METRICS);
 
-            return new PerfidiousRemoteExecutor(
+            return new LinuxRemoteExecutor(
                 launcher: $launcher,
                 metrics: $metrics,
             );

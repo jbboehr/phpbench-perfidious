@@ -23,7 +23,7 @@
 namespace jbboehr\PhpBenchPerfidious\Tests\Executor;
 
 use InvalidArgumentException;
-use jbboehr\PhpBenchPerfidious\Executor\PerfidiousRemoteExecutor;
+use jbboehr\PhpBenchPerfidious\Executor\LinuxRemoteExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark;
 use PhpBench\Executor\ExecutionContext;
@@ -41,9 +41,9 @@ use RuntimeException;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use UnexpectedValueException;
 
-class PerfidiousRemoteExecutorTest extends TestCase
+class LinuxRemoteExecutorTest extends TestCase
 {
-    private PerfidiousRemoteExecutor $executor;
+    private LinuxRemoteExecutor $executor;
 
     protected function setUp(): void
     {
@@ -52,7 +52,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
         // Software-only metric: reliable in sandboxed/virtualized CI environments
         // where hardware PMU counters are not available. It's also in TIME_EVENTS,
         // so a TimeResult is reliably produced.
-        $this->executor = new PerfidiousRemoteExecutor($launcher, metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK']);
+        $this->executor = new LinuxRemoteExecutor($launcher, metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK']);
     }
 
     /**
@@ -207,10 +207,10 @@ class PerfidiousRemoteExecutorTest extends TestCase
         // These come from TemplateExecutor::configure(); if execute() ever stopped
         // calling parent::configure(), OPTION_PHP_CONFIG wouldn't be a registered
         // option at all and this would fail.
-        $this->assertArrayHasKey(PerfidiousRemoteExecutor::OPTION_PHP_CONFIG, $resolved);
-        $this->assertSame([], $resolved[PerfidiousRemoteExecutor::OPTION_PHP_CONFIG]);
+        $this->assertArrayHasKey(LinuxRemoteExecutor::OPTION_PHP_CONFIG, $resolved);
+        $this->assertSame([], $resolved[LinuxRemoteExecutor::OPTION_PHP_CONFIG]);
 
-        $this->assertTrue($resolved[PerfidiousRemoteExecutor::OPTION_SAFE_PARAMETERS]);
+        $this->assertTrue($resolved[LinuxRemoteExecutor::OPTION_SAFE_PARAMETERS]);
     }
 
     public function testConstructorRejectsMultipleRecognizedTimeEvents(): void
@@ -218,7 +218,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('At most one recognized time event is supported');
 
-        new PerfidiousRemoteExecutor(new Launcher(), metrics: [
+        new LinuxRemoteExecutor(new Launcher(), metrics: [
             'perf::PERF_COUNT_SW_CPU_CLOCK',
             'perf::TASK-CLOCK',
         ]);
@@ -234,14 +234,14 @@ class PerfidiousRemoteExecutorTest extends TestCase
         $this->executor->execute(
             $this->makeContext('passes'),
             new Config('test', [
-                PerfidiousRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => new \stdClass()],
+                LinuxRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => new \stdClass()],
             ]),
         );
     }
 
     public function testDecodeResultsReportsTheInvalidKeyAndType(): void
     {
-        $method = new ReflectionMethod(PerfidiousRemoteExecutor::class, 'decodeResults');
+        $method = new ReflectionMethod(LinuxRemoteExecutor::class, 'decodeResults');
 
         $this->expectException(UnexpectedValueException::class);
         $this->expectExceptionMessage('Remote result key "mem.peak" must be an int, got string');
@@ -254,7 +254,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
 
     public function testMissingExtensionHasATargetedDiagnosticInTheChildProcess(): void
     {
-        $executor = new PerfidiousRemoteExecutor(
+        $executor = new LinuxRemoteExecutor(
             new Launcher(bootstrap: __DIR__ . '/../bootstrap.php', phpDisableIni: true),
             metrics: ['perf::PERF_COUNT_SW_CPU_CLOCK'],
         );
@@ -275,7 +275,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
 
         try {
             $config = $this->resolveConfig([
-                PerfidiousRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => '123M'],
+                LinuxRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => '123M'],
             ]);
 
             $this->executor->execute(
@@ -296,7 +296,7 @@ class PerfidiousRemoteExecutorTest extends TestCase
 
         try {
             $config = $this->resolveConfig([
-                PerfidiousRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => ['64M', '256M']],
+                LinuxRemoteExecutor::OPTION_PHP_CONFIG => ['memory_limit' => ['64M', '256M']],
             ]);
 
             $this->executor->execute(

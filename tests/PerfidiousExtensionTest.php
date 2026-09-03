@@ -22,8 +22,8 @@
 
 namespace jbboehr\PhpBenchPerfidious\Tests;
 
-use jbboehr\PhpBenchPerfidious\Executor\PerfidiousRemoteExecutor;
-use jbboehr\PhpBenchPerfidious\PerfidiousExecutor;
+use jbboehr\PhpBenchPerfidious\Executor\LinuxRemoteExecutor;
+use jbboehr\PhpBenchPerfidious\LinuxExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousExtension;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
@@ -65,7 +65,7 @@ class PerfidiousExtensionTest extends TestCase
             // Software-only metric: reliable in sandboxed/virtualized CI environments
             // where hardware PMU counters are not available.
             PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK'],
-            // Needed for PerfidiousRemoteExecutor's child process to autoload fixture classes.
+            // Needed for LinuxRemoteExecutor's child process to autoload fixture classes.
             RunnerExtension::PARAM_BOOTSTRAP => __DIR__ . '/bootstrap.php',
         ]);
         $container->init();
@@ -79,7 +79,7 @@ class PerfidiousExtensionTest extends TestCase
         $container->init();
 
         $this->assertSame(
-            PerfidiousExecutor::DEFAULT_METRICS,
+            LinuxExecutor::DEFAULT_METRICS,
             $container->getParameter(PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS)
         );
         $this->assertIsString($container->getParameter(PerfidiousExtension::PARAM_PROGRESS_SUMMARY_FORMAT));
@@ -115,10 +115,10 @@ class PerfidiousExtensionTest extends TestCase
         $container = $this->makeContainer();
         $tagged = $container->getServiceIdsForTag(RunnerExtension::TAG_EXECUTOR);
 
-        $this->assertArrayHasKey(PerfidiousExecutor::class . '.composite', $tagged);
-        $this->assertSame('perfidious-linux', $tagged[PerfidiousExecutor::class . '.composite']['name']);
+        $this->assertArrayHasKey(LinuxExecutor::class . '.composite', $tagged);
+        $this->assertSame('perfidious-linux', $tagged[LinuxExecutor::class . '.composite']['name']);
 
-        $executor = $container->get(PerfidiousExecutor::class . '.composite');
+        $executor = $container->get(LinuxExecutor::class . '.composite');
         $this->assertInstanceOf(CompositeExecutor::class, $executor);
     }
 
@@ -154,9 +154,9 @@ class PerfidiousExtensionTest extends TestCase
         // plumbing end to end: it opens a real perf handle for the configured
         // metric, so a bad wiring (wrong parameter name, type mismatch, etc.)
         // would throw here rather than silently doing nothing.
-        $executor = $container->get(PerfidiousExecutor::class);
+        $executor = $container->get(LinuxExecutor::class);
 
-        $this->assertInstanceOf(PerfidiousExecutor::class, $executor);
+        $this->assertInstanceOf(LinuxExecutor::class, $executor);
     }
 
     public function testRegistersRemoteExecutorUnderPerfidiousLinuxRemoteTag(): void
@@ -164,10 +164,10 @@ class PerfidiousExtensionTest extends TestCase
         $container = $this->makeContainer();
         $tagged = $container->getServiceIdsForTag(RunnerExtension::TAG_EXECUTOR);
 
-        $this->assertArrayHasKey(PerfidiousRemoteExecutor::class . '.composite', $tagged);
-        $this->assertSame('perfidious-linux-remote', $tagged[PerfidiousRemoteExecutor::class . '.composite']['name']);
+        $this->assertArrayHasKey(LinuxRemoteExecutor::class . '.composite', $tagged);
+        $this->assertSame('perfidious-linux-remote', $tagged[LinuxRemoteExecutor::class . '.composite']['name']);
 
-        $executor = $container->get(PerfidiousRemoteExecutor::class . '.composite');
+        $executor = $container->get(LinuxRemoteExecutor::class . '.composite');
         $this->assertInstanceOf(CompositeExecutor::class, $executor);
 
         // Regression test for the bug in the abandoned topic/remote-executor attempt:
@@ -188,11 +188,11 @@ class PerfidiousExtensionTest extends TestCase
     {
         $container = $this->makeContainer();
 
-        // Unlike PerfidiousExecutor, constructing PerfidiousRemoteExecutor doesn't
+        // Unlike LinuxExecutor, constructing LinuxRemoteExecutor doesn't
         // eagerly open a perf handle (that only happens per-execution, in the child
         // process), so this has to actually run once to prove the wiring works.
-        $executor = $container->get(PerfidiousRemoteExecutor::class);
-        $this->assertInstanceOf(PerfidiousRemoteExecutor::class, $executor);
+        $executor = $container->get(LinuxRemoteExecutor::class);
+        $this->assertInstanceOf(LinuxRemoteExecutor::class, $executor);
 
         $resolver = new OptionsResolver();
         $executor->configure($resolver);

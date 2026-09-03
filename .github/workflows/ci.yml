@@ -71,7 +71,7 @@ jobs:
 
                   grep -Fxq "composer.json" "$archive_dir/contents.txt"
                   grep -Fxq "LICENSE.md" "$archive_dir/contents.txt"
-                  grep -Fxq "src/PerfidiousExecutor.php" "$archive_dir/contents.txt"
+                  grep -Fxq "src/LinuxExecutor.php" "$archive_dir/contents.txt"
 
                   forbidden='^(\.claude|\.direnv|\.github|\.idea|\.phpbench|coverage|nix|stubs|tests|tmp|vendor)(/|$)|^(\.editorconfig|\.envrc|\.gitattributes|\.gitignore|\.php-cs-fixer\.cache|\.php-cs-fixer\.dist\.php|\.phpunit\.result\.cache|\.pre-commit-config\.yaml|clover\.xml|composer\.lock|flake\.lock|flake\.nix|infection\.json5|phpbench\.json|phpstan\.neon\.dist|phpunit\.xml\.dist|psalm\.xml)$|(^|/)[^/]*\.log$|^result'
                   if grep -E "$forbidden" "$archive_dir/contents.txt"; then
