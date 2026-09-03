@@ -20,7 +20,7 @@
  * <http://www.gnu.org/licenses/> and the LICENSE_EXCEPTION file.
  */
 
-namespace jbboehr\PhpBenchPerfidious\Tests\Perf;
+namespace jbboehr\PhpBenchPerfidious\Tests\Linux;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
@@ -31,7 +31,7 @@ class NativeHandleTest extends TestCase
     {
         $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
         $script = sprintf(
-            'require %s; new jbboehr\\PhpBenchPerfidious\\Perf\\NativeHandle([]);',
+            'require %s; new jbboehr\\PhpBenchPerfidious\\Linux\\NativeHandle([]);',
             var_export($autoload, true),
         );
         $process = new Process([PHP_BINARY, '-n', '-d', 'display_errors=stderr', '-r', $script]);

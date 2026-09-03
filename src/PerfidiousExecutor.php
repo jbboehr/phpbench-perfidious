@@ -23,8 +23,8 @@
 namespace jbboehr\PhpBenchPerfidious;
 
 use InvalidArgumentException;
-use jbboehr\PhpBenchPerfidious\Perf\HandleInterface;
-use jbboehr\PhpBenchPerfidious\Perf\NativeHandle;
+use jbboehr\PhpBenchPerfidious\Linux\HandleInterface;
+use jbboehr\PhpBenchPerfidious\Linux\NativeHandle;
 use PhpBench\Executor\BenchmarkExecutorInterface;
 use PhpBench\Executor\Exception\ExecutionError;
 use PhpBench\Executor\ExecutionContext;

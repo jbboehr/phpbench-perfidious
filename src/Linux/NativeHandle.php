@@ -20,7 +20,7 @@
  * <http://www.gnu.org/licenses/> and the LICENSE_EXCEPTION file.
  */
 
-namespace jbboehr\PhpBenchPerfidious\Perf;
+namespace jbboehr\PhpBenchPerfidious\Linux;
 
 use Perfidious\Handle;
 use Perfidious\ReadResult;

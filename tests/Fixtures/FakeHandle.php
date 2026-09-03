@@ -22,12 +22,12 @@
 
 namespace jbboehr\PhpBenchPerfidious\Tests\Fixtures;
 
-use jbboehr\PhpBenchPerfidious\Perf\HandleInterface;
+use jbboehr\PhpBenchPerfidious\Linux\HandleInterface;
 use Perfidious\ReadResult;
 use ReflectionClass;
 
 /**
- * Test double for Perf\HandleInterface. Perfidious\ReadResult has no public
+ * Test double for Linux\HandleInterface. Perfidious\ReadResult has no public
  * constructor (it's populated internally by the native extension), so
  * fakeReadResult() builds one via reflection -- readonly properties can be
  * set exactly once that way even from outside the declaring class, which is
