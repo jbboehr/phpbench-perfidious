@@ -23,6 +23,7 @@
 namespace jbboehr\PhpBenchPerfidious\Tests;
 
 use InvalidArgumentException;
+use jbboehr\PhpBenchPerfidious\Linux\NativeHandle;
 use jbboehr\PhpBenchPerfidious\LinuxExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark;
@@ -148,7 +149,7 @@ class LinuxExecutorTest extends TestCase
             $executor->execute($this->makeContext('throwsException'), new Config('test', []));
             $this->fail('Expected an ExecutionError to be thrown');
         } catch (ExecutionError) {
-            $this->assertSame(['reset', 'enable', 'disable'], $handle->calls);
+            $this->assertSame(['reset', 'read', 'enable', 'disable'], $handle->calls);
         }
     }
 
@@ -317,11 +318,9 @@ class LinuxExecutorTest extends TestCase
 
         $executor->execute($this->makeContext('passes', 3), new Config('test', []));
 
-        // reset() then enable() must bracket the timed loop *before* it runs,
-        // disable() then read() must bracket it *after* -- this is the call
-        // order/count that was previously impossible to verify without
-        // mocking the final Perfidious\Handle class.
-        $this->assertSame(['reset', 'enable', 'disable', 'read'], $handle->calls);
+        // Capture the lifetime timing baseline after reset, while disabled,
+        // then bracket the measured loop with enable/disable and read its result.
+        $this->assertSame(['reset', 'read', 'enable', 'disable', 'read'], $handle->calls);
     }
 
     public function testTimeRunningZeroFromHandleIsWrappedAsExecutionError(): void
@@ -363,5 +362,117 @@ class LinuxExecutorTest extends TestCase
             LinuxExecutor::adjustedTime($count, $timeEnabled, $timeRunning),
             $timeResult->getNet(),
         );
+    }
+
+    public function testReusedHandleScalesWithTheCurrentIntervalTimings(): void
+    {
+        $handle = new FakeHandle(values: ['perf::PERF_COUNT_SW_CPU_CLOCK' => 5_000_000]);
+        $executor = new LinuxExecutor($handle);
+        $context = $this->makeContext('passes', revolutions: 10);
+        $config = new Config('test', []);
+
+        $executor->execute($context, $config);
+        $handle->timeEnabled = 2_000_000;
+        $handle->timeRunning = 500_000;
+        $results = $executor->execute($context, $config);
+
+        $perfResult = $results->byType(PerfidiousResult::class)->first();
+        self::assertInstanceOf(PerfidiousResult::class, $perfResult);
+        self::assertSame(2_000_000, $perfResult->values['perf__PERF_COUNT_SW_CPU_CLOCK']);
+        self::assertSame(5_000_000, $perfResult->values['perf__PERF_COUNT_SW_CPU_CLOCK_raw']);
+        self::assertSame(2_000_000, $perfResult->timeEnabled);
+        self::assertSame(500_000, $perfResult->timeRunning);
+
+        $timeResult = $results->byType(TimeResult::class)->first();
+        self::assertInstanceOf(TimeResult::class, $timeResult);
+        self::assertSame(20_000, $timeResult->getNet());
+    }
+
+    public function testReusedHandleRejectsAnIntervalWhoseCountersDidNotRun(): void
+    {
+        $handle = new FakeHandle(values: ['perf::PERF_COUNT_SW_CPU_CLOCK' => 5_000_000]);
+        $executor = new LinuxExecutor($handle);
+        $context = $this->makeContext('passes', revolutions: 10);
+        $config = new Config('test', []);
+
+        $executor->execute($context, $config);
+        $handle->timeEnabled = 2_000_000;
+        $handle->timeRunning = 0;
+
+        try {
+            $executor->execute($context, $config);
+            self::fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError $error) {
+            self::assertStringContainsString('perf_events failed to run', $error->getMessage());
+        }
+
+        // The rejected interval still advanced the lifetime enabled time. A retry
+        // must baseline that failed interval away and report only its own timings.
+        $handle->timeEnabled = 3_000_000;
+        $handle->timeRunning = 1_000_000;
+        $results = $executor->execute($context, $config);
+
+        $perfResult = $results->byType(PerfidiousResult::class)->first();
+        self::assertInstanceOf(PerfidiousResult::class, $perfResult);
+        self::assertSame(3_000_000, $perfResult->timeEnabled);
+        self::assertSame(1_000_000, $perfResult->timeRunning);
+        self::assertSame(1_500_000, $perfResult->values['perf__PERF_COUNT_SW_CPU_CLOCK']);
+
+        $timeResult = $results->byType(TimeResult::class)->first();
+        self::assertInstanceOf(TimeResult::class, $timeResult);
+        self::assertSame(15_000, $timeResult->getNet());
+    }
+
+    public function testBenchmarkFailureDoesNotPolluteTheNextInterval(): void
+    {
+        $handle = new FakeHandle(
+            timeRunning: 4_000_000,
+            timeEnabled: 8_000_000,
+            values: ['perf::PERF_COUNT_SW_CPU_CLOCK' => 6_000_000],
+        );
+        $executor = new LinuxExecutor($handle);
+        $config = new Config('test', []);
+
+        try {
+            $executor->execute($this->makeContext('throwsException'), $config);
+            self::fail('Expected an ExecutionError to be thrown');
+        } catch (ExecutionError) {
+        }
+
+        $handle->timeEnabled = 3_000_000;
+        $handle->timeRunning = 1_000_000;
+        $results = $executor->execute($this->makeContext('passes', revolutions: 2), $config);
+
+        $perfResult = $results->byType(PerfidiousResult::class)->first();
+        self::assertInstanceOf(PerfidiousResult::class, $perfResult);
+        self::assertSame(3_000_000, $perfResult->timeEnabled);
+        self::assertSame(1_000_000, $perfResult->timeRunning);
+        self::assertSame(9_000_000, $perfResult->values['perf__PERF_COUNT_SW_CPU_CLOCK']);
+
+        $timeResult = $results->byType(TimeResult::class)->first();
+        self::assertInstanceOf(TimeResult::class, $timeResult);
+        self::assertSame(18_000, $timeResult->getNet());
+        self::assertSame([
+            'reset', 'read', 'enable', 'disable',
+            'reset', 'read', 'enable', 'disable', 'read',
+        ], $handle->calls);
+    }
+
+    public function testReusedNativeHandleReportsIntervalTimings(): void
+    {
+        $handle = new NativeHandle(['perf::PERF_COUNT_SW_CPU_CLOCK']);
+        $executor = new LinuxExecutor($handle);
+        $config = new Config('test', []);
+
+        $executor->execute($this->makeContext('passes', revolutions: 100), $config);
+        $before = $handle->read();
+        $results = $executor->execute($this->makeContext('passes'), $config);
+        $after = $handle->read();
+
+        $perfResult = $results->byType(PerfidiousResult::class)->first();
+        self::assertInstanceOf(PerfidiousResult::class, $perfResult);
+        self::assertGreaterThan(0, $before->timeRunning);
+        self::assertSame($after->timeEnabled - $before->timeEnabled, $perfResult->timeEnabled);
+        self::assertSame($after->timeRunning - $before->timeRunning, $perfResult->timeRunning);
     }
 }

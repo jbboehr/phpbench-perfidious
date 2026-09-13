@@ -27,7 +27,9 @@ use Perfidious\ReadResult;
 use ReflectionClass;
 
 /**
- * Test double for Linux\HandleInterface. Perfidious\ReadResult has no public
+ * Test double for Linux\HandleInterface. Configured timing increments accumulate
+ * when disabled and survive reset(), matching the native handle's lifetime totals.
+ * Perfidious\ReadResult has no public
  * constructor (it's populated internally by the native extension), so
  * fakeReadResult() builds one via reflection -- readonly properties can be
  * set exactly once that way even from outside the declaring class, which is
@@ -38,15 +40,18 @@ final class FakeHandle implements HandleInterface
     /** @var list<string> */
     public array $calls = [];
 
-    /** @var ReadResult<list<string>> */
-    private readonly ReadResult $readResult;
+    private int $totalTimeRunning = 0;
+    private int $totalTimeEnabled = 0;
+    private bool $hasCompletedInterval = false;
 
     /**
      * @param array<string, int|float> $values
      */
-    public function __construct(int $timeRunning = 1_000_000, int $timeEnabled = 1_000_000, array $values = [])
-    {
-        $this->readResult = self::fakeReadResult($timeRunning, $timeEnabled, $values);
+    public function __construct(
+        public int $timeRunning = 1_000_000,
+        public int $timeEnabled = 1_000_000,
+        private readonly array $values = [],
+    ) {
     }
 
     /**
@@ -67,6 +72,7 @@ final class FakeHandle implements HandleInterface
     public function reset(): static
     {
         $this->calls[] = 'reset';
+        $this->hasCompletedInterval = false;
 
         return $this;
     }
@@ -81,6 +87,9 @@ final class FakeHandle implements HandleInterface
     public function disable(): static
     {
         $this->calls[] = 'disable';
+        $this->totalTimeRunning += $this->timeRunning;
+        $this->totalTimeEnabled += $this->timeEnabled;
+        $this->hasCompletedInterval = true;
 
         return $this;
     }
@@ -89,6 +98,10 @@ final class FakeHandle implements HandleInterface
     {
         $this->calls[] = 'read';
 
-        return $this->readResult;
+        $values = $this->hasCompletedInterval
+            ? $this->values
+            : array_map(static fn (int|float $value): int => 0, $this->values);
+
+        return self::fakeReadResult($this->totalTimeRunning, $this->totalTimeEnabled, $values);
     }
 }

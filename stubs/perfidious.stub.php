@@ -25,7 +25,7 @@ namespace Perfidious;
 /** @var bool Whether the extension was built with its debug-only test hooks. */
 const DEBUG = false;
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.1";
 
 const MOTD = "Think not that I am come to send peace on earth: I came not to send peace, but a sword. Matthew 10:34";
 
@@ -105,14 +105,14 @@ final class Sampler
     }
 
     /**
-     * @param non-empty-list<Metric> $metrics
+     * @phpstan-param non-empty-list<Metric> $metrics
      * @throws UnsupportedMetricException|ResourceBusyException|IOException|OverflowException
      */
-    public static function open(array $metrics, Scope $scope = Scope::CurrentProcess): self
+    public static function open(array $metrics, Scope $scope = Scope::CurrentThread): Sampler
     {
     }
 
-    /** @return non-empty-list<Metric> */
+    /** @phpstan-return non-empty-list<Metric> */
     public function metrics(): array
     {
     }
@@ -137,7 +137,7 @@ final class Sample
     {
     }
 
-    public function since(self $earlier): SampleDelta
+    public function since(Sample $earlier): SampleDelta
     {
     }
 }
@@ -160,7 +160,9 @@ final class SampleDelta
  */
 final class ReadResult
 {
+    /** Total nanoseconds enabled over the handle's lifetime, including before reset(). */
     public readonly int $timeEnabled;
+    /** Total nanoseconds running over the handle's lifetime, including before reset(). */
     public readonly int $timeRunning;
     /**
      * @var array<string, int>
@@ -180,6 +182,8 @@ function get_pmu_info(int $pmu): PmuInfo
 }
 
 /**
+ * The event index must belong to the requested PMU.
+ *
  * @throws PmuNotFoundException|PmuEventNotFoundException
  * @see https://perfmon2.sourceforge.net/manv4/pfm_get_event_info.html
  */
@@ -188,17 +192,7 @@ function get_pmu_event_info(int $pmu, int $idx): PmuEventInfo
 }
 
 /**
- * Returns a borrowed view of the persistent global handle.
- * Closing the returned object detaches only that view.
- *
- * @phpstan-return ?Handle<list<string>>
- */
-function global_handle(): ?Handle
-{
-}
-
-/**
- * @return list<PmuInfo>
+ * @phpstan-return list<PmuInfo>
  * @see https://perfmon2.sourceforge.net/manv4/pfm_get_pmu_info.html
  */
 function list_pmus(): array
@@ -206,7 +200,7 @@ function list_pmus(): array
 }
 
 /**
- * @return list<PmuEventInfo>
+ * @phpstan-return list<PmuEventInfo>
  * @throws PmuNotFoundException|PmuEventNotFoundException
  * @see https://perfmon2.sourceforge.net/manv4/pfm_get_event_info.html
  */
@@ -215,8 +209,10 @@ function list_pmu_events(int $pmu): array
 }
 
 /**
- * @param list<string> $event_names a list of libpfm event names, see list_pmu_events
- * @throws PmuEventNotFoundException|IOException|OverflowException
+ * @param array $event_names a list of libpfm event names, see list_pmu_events
+ * @param int $pid process/thread selector, which must fit the native PID type
+ * @param int $cpu -1 or a nonnegative CPU ID that fits a native int, with availability checked by the kernel
+ * @throws PmuEventNotFoundException|IOException|OverflowException|\ValueError
  *
  * @phpstan-template T of string
  * @phpstan-param list<T> $event_names
@@ -227,9 +223,14 @@ function open(array $event_names, int $pid = 0, int $cpu = -1): Handle
 }
 
 /**
- * Returns a borrowed view of the persistent request handle.
+ * Returns a borrowed view of the request handle, initialized on the worker's first request.
  * Closing the returned object detaches only that view.
  *
+ * Initialization is retried on later requests if opening fails. Pending initialization or
+ * lifecycle errors are thrown once when this function is called; subsequent calls return
+ * null if the handle is unavailable for this request.
+ * An unconsumed error remains pending even if a later request successfully opens the handle.
+ * @throws PmuEventNotFoundException|IOException if the handle could not be prepared
  * @phpstan-return ?Handle<list<string>>
  */
 function request_handle(): ?Handle
@@ -238,7 +239,7 @@ function request_handle(): ?Handle
 
 /**
  * Handles returned by open() own their native descriptors and release them on close() or destruction.
- * Handles returned by global_handle() and request_handle() are borrowed views of persistent native state.
+ * Handles returned by request_handle() are borrowed views of persistent native state.
  *
  * @phpstan-template T of list<string>
  */
@@ -255,18 +256,18 @@ final class Handle
     }
 
     /**
-     * @return $this
+     * @phpstan-return $this
      * @throws ClosedException|IOException
      */
-    final public function enable(): self
+    final public function enable(): Handle
     {
     }
 
     /**
-     * @return $this
+     * @phpstan-return $this
      * @throws ClosedException|IOException
      */
-    final public function disable(): self
+    final public function disable(): Handle
     {
     }
 
@@ -285,6 +286,8 @@ final class Handle
     }
 
     /**
+     * Returns raw counts since opening or the latest reset, with kernel-lifetime timing totals.
+     *
      * @throws ClosedException|OverflowException|IOException
      *
      * @phpstan-return ReadResult<T>
@@ -303,10 +306,13 @@ final class Handle
     }
 
     /**
-     * @return $this
+     * Clears counts while preserving the enabled state. Lifetime timing totals are not cleared.
+     * Active counters are briefly disabled to capture the timing baseline used by phpinfo().
+     *
+     * @phpstan-return $this
      * @throws ClosedException|IOException
      */
-    final public function reset(): self
+    final public function reset(): Handle
     {
     }
 }
@@ -317,23 +323,21 @@ final class Handle
 final class PmuInfo
 {
     /**
-     * This is the symbolic name of the PMU. This name can be used as a prefix in an event string.
+     * Symbolic PMU name, usable as an event-string prefix.
      */
     public readonly string $name;
     public readonly string $desc;
     /**
-     * This is the unique PMU identification code. It is identical to the value passed in pmu and it provided only for
-     * completeness.
+     * Unique PMU identifier, matching the requested $pmu in get_pmu_info().
      */
     public readonly int $pmu;
     public readonly int $type;
     /**
-     * This is the number of available events for this PMU model based on the host processor. It is only valid is the
-     * is_present field is set to true.
+     * Number of available events for this PMU model on the host; valid only when $is_present is true.
      */
     public readonly int $nevents;
     /**
-     * This field is set to true if the PMU model has been detected on the host system.
+     * Whether this PMU model was detected on the host.
      */
     public readonly bool $is_present;
 }
@@ -346,21 +350,19 @@ final class PmuEventInfo
     public readonly string $name;
     public readonly string $desc;
     /**
-     * Certain events may be just variations of actual events. They may be provided as handy shortcuts to avoid
-     * supplying a long list of attributes. For those events, this field is not NULL and contains the complete
-     * equivalent event string.
+     * Complete equivalent event string for shortcut events, when provided; otherwise null.
      */
     public readonly ?string $equiv;
     /**
-     * This is the ID of the PMU model this event belongs to.
+     * Identifier of the PMU model that owns this event.
      */
     public readonly int $pmu;
     /**
-     * This is libpfm's event index and can be passed to get_pmu_event_info().
+     * Libpfm event index for get_pmu_event_info().
      */
     public readonly int $idx;
     /**
-     * This field is set to true if the PMU model has been detected on the host system.
+     * Whether this PMU model was detected on the host.
      */
     public readonly bool $is_present;
 }

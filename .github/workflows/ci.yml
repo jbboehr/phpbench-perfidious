@@ -98,7 +98,7 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   coverage: "none"
-                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
+                  extensions: perfidious-jbboehr/php-perfidious@v0.3.1
                   php-version: "${{ matrix.php-version }}"
                   tools: composer:v2
               env:
@@ -145,7 +145,7 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   coverage: "none"
-                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
+                  extensions: perfidious-jbboehr/php-perfidious@v0.3.1
                   php-version: "8.2"
                   tools: composer:v2
               env:
@@ -193,7 +193,7 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   coverage: pcov
-                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
+                  extensions: perfidious-jbboehr/php-perfidious@v0.3.1
                   php-version: "${{ matrix.php-version }}"
                   tools: composer:v2
               env:
@@ -244,7 +244,7 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   coverage: pcov
-                  extensions: perfidious-jbboehr/php-perfidious@v0.2.0
+                  extensions: perfidious-jbboehr/php-perfidious@v0.3.1
                   php-version: "${{ matrix.php-version }}"
                   tools: composer:v2
               env:

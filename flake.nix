@@ -39,7 +39,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     perfidious = {
-      url = "github:jbboehr/php-perfidious/develop";
+      url = "github:jbboehr/php-perfidious/v0.3.1";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.systems.follows = "systems";
       inputs.flake-utils.follows = "flake-utils";

@@ -190,6 +190,8 @@ class LinuxExecutor implements BenchmarkExecutorInterface
         }
 
         $this->handle->reset();
+        // reset() clears counts, but the kernel's enabled/running times are lifetime totals.
+        $baseline = $this->handle->read();
         $this->handle->enable();
 
         try {
@@ -202,22 +204,24 @@ class LinuxExecutor implements BenchmarkExecutorInterface
         }
 
         $rr = $this->handle->read();
+        $timeRunning = $rr->timeRunning - $baseline->timeRunning;
+        $timeEnabled = $rr->timeEnabled - $baseline->timeEnabled;
 
-        self::assertCountersRan($rr->timeRunning);
+        self::assertCountersRan($timeRunning);
 
         $results = [];
 
         $results[] = PerfidiousResult::create(
-            timeRunning: $rr->timeRunning,
-            timeEnabled: $rr->timeEnabled,
+            timeRunning: $timeRunning,
+            timeEnabled: $timeEnabled,
             revolutions: $context->getRevolutions(),
             rawValues: $rr->values,
         );
 
         $timeResult = self::createTimeResult(
             $rr->values,
-            $rr->timeEnabled,
-            $rr->timeRunning,
+            $timeEnabled,
+            $timeRunning,
             $context->getRevolutions(),
         );
         if (null !== $timeResult) {
