@@ -25,7 +25,9 @@ namespace jbboehr\PhpBenchPerfidious\Sampler;
 interface SamplerInterface
 {
     /**
-     * @param callable(): void $operation
+     * The operation runs synchronously and its return value is ignored.
+     *
+     * @param callable(): mixed $operation
      */
     public function measure(callable $operation): Measurement;
 }
