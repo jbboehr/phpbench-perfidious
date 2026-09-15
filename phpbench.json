@@ -5,6 +5,10 @@
     "runner.executor": "perfidious-linux",
     "runner.progress": "perfidious-linux",
     "core.profiles": {
+        "perfidious": {
+            "runner.executor": "perfidious",
+            "runner.progress": "dots"
+        },
         "perfidious-linux-remote": {
             "runner.executor": "perfidious-linux-remote"
         },

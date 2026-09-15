@@ -22,18 +22,24 @@
 
 namespace jbboehr\PhpBenchPerfidious\Tests;
 
+use jbboehr\PhpBenchPerfidious\Executor\InitializingMethodExecutor;
 use jbboehr\PhpBenchPerfidious\Executor\LinuxRemoteExecutor;
 use jbboehr\PhpBenchPerfidious\LinuxExecutor;
 use jbboehr\PhpBenchPerfidious\PerfidiousExtension;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
 use jbboehr\PhpBenchPerfidious\Report\PerfidiousGenerator;
+use jbboehr\PhpBenchPerfidious\SamplerExecutor;
+use jbboehr\PhpBenchPerfidious\SamplerResult;
 use jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark;
 use PhpBench\DependencyInjection\Container;
 use PhpBench\Executor\CompositeExecutor;
 use PhpBench\Executor\ExecutionContext;
+use PhpBench\Executor\Exception\ExecutionError;
 use PhpBench\Executor\Method\ErrorHandlingExecutorDecorator;
+use PhpBench\Executor\Method\LocalMethodExecutor;
 use PhpBench\Executor\Method\RemoteMethodExecutor;
+use PhpBench\Executor\MethodExecutorContext;
 use PhpBench\Extension\ConsoleExtension;
 use PhpBench\Extension\CoreExtension;
 use PhpBench\Extension\ExpressionExtension;
@@ -42,15 +48,19 @@ use PhpBench\Extension\RunnerExtension;
 use PhpBench\Extension\StorageExtension;
 use PhpBench\Extensions\XDebug\XDebugExtension;
 use PhpBench\Registry\Config;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresOperatingSystem;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionProperty;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
+use Symfony\Component\Process\Process;
 
 class PerfidiousExtensionTest extends TestCase
 {
-    private function makeContainer(): Container
+    /** @param array<string, mixed> $parameters */
+    private function makeContainer(array $parameters = []): Container
     {
         $container = new Container([
             CoreExtension::class,
@@ -61,13 +71,13 @@ class PerfidiousExtensionTest extends TestCase
             XDebugExtension::class,
             ConsoleExtension::class,
             PerfidiousExtension::class,
-        ], [
+        ], array_replace([
             // Software-only metric: reliable in sandboxed/virtualized CI environments
             // where hardware PMU counters are not available.
             PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS => ['perf::PERF_COUNT_SW_CPU_CLOCK'],
             // Needed for LinuxRemoteExecutor's child process to autoload fixture classes.
             RunnerExtension::PARAM_BOOTSTRAP => __DIR__ . '/bootstrap.php',
-        ]);
+        ], $parameters));
         $container->init();
 
         return $container;
@@ -82,6 +92,7 @@ class PerfidiousExtensionTest extends TestCase
             LinuxExecutor::DEFAULT_METRICS,
             $container->getParameter(PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS)
         );
+        $this->assertSame(['cpu-time'], $container->getParameter(PerfidiousExtension::PARAM_PERFIDIOUS_METRICS));
         $this->assertIsString($container->getParameter(PerfidiousExtension::PARAM_PROGRESS_SUMMARY_FORMAT));
         $this->assertIsString($container->getParameter(PerfidiousExtension::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT));
     }
@@ -108,6 +119,170 @@ class PerfidiousExtensionTest extends TestCase
         $resolver->resolve([
             PerfidiousExtension::PARAM_PROGRESS_SUMMARY_FORMAT => ['not a string'],
         ]);
+    }
+
+    #[DataProvider('invalidSamplerMetrics')]
+    public function testConfigureRejectsInvalidSamplerMetrics(mixed $metrics): void
+    {
+        $resolver = new OptionsResolver();
+        (new PerfidiousExtension())->configure($resolver);
+
+        $this->expectException(InvalidOptionsException::class);
+        $this->expectExceptionMessage('perfidious.metrics');
+
+        $resolver->resolve([PerfidiousExtension::PARAM_PERFIDIOUS_METRICS => $metrics]);
+    }
+
+    /** @return iterable<string, array{mixed}> */
+    public static function invalidSamplerMetrics(): iterable
+    {
+        yield 'scalar' => ['cpu-time'];
+        yield 'null' => [null];
+        yield 'empty' => [[]];
+        yield 'unknown' => [['cpu-time', 'unknown']];
+        yield 'Linux event name' => [['perf::PERF_COUNT_SW_CPU_CLOCK']];
+        yield 'non-string' => [['cpu-time', 42]];
+        yield 'duplicate' => [['cpu-time', 'page-faults', 'cpu-time']];
+        yield 'associative' => [['metric' => 'cpu-time']];
+        yield 'sparse' => [[1 => 'cpu-time']];
+    }
+
+    public function testConfigureAcceptsAllSamplerMetricNames(): void
+    {
+        $metrics = ['instructions', 'cpu-cycles', 'context-switches', 'page-faults', 'cpu-time'];
+        $resolver = new OptionsResolver();
+        (new PerfidiousExtension())->configure($resolver);
+
+        $resolved = $resolver->resolve([PerfidiousExtension::PARAM_PERFIDIOUS_METRICS => $metrics]);
+
+        self::assertSame($metrics, $resolved[PerfidiousExtension::PARAM_PERFIDIOUS_METRICS]);
+    }
+
+    public function testConfigurationDoesNotRequireTheNativeExtension(): void
+    {
+        $script = sprintf(
+            'require %s;
+            $container = new PhpBench\\DependencyInjection\\Container([
+                jbboehr\\PhpBenchPerfidious\\PerfidiousExtension::class,
+            ]);
+            $container->init();
+            echo json_encode($container->getParameter("perfidious.metrics"));',
+            var_export(__DIR__ . '/bootstrap.php', true),
+        );
+        $process = new Process([PHP_BINARY, '-n', '-r', $script]);
+        $process->run();
+
+        self::assertTrue($process->isSuccessful(), $process->getErrorOutput() . $process->getOutput());
+        self::assertSame('["cpu-time"]', $process->getOutput());
+    }
+
+    public function testRegistersSamplerExecutorUnderPerfidiousTag(): void
+    {
+        $container = $this->makeContainer();
+        $tagged = $container->getServiceIdsForTag(RunnerExtension::TAG_EXECUTOR);
+
+        self::assertArrayHasKey(SamplerExecutor::class . '.composite', $tagged);
+        self::assertSame('perfidious', $tagged[SamplerExecutor::class . '.composite']['name']);
+
+        $executor = $container->get(SamplerExecutor::class . '.composite');
+        self::assertInstanceOf(CompositeExecutor::class, $executor);
+
+        $benchmarkExecutorProperty = new ReflectionProperty(CompositeExecutor::class, 'benchmarkExecutor');
+        self::assertInstanceOf(SamplerExecutor::class, $benchmarkExecutorProperty->getValue($executor));
+
+        $methodExecutorProperty = new ReflectionProperty(CompositeExecutor::class, 'methodExecutor');
+        $decorator = $methodExecutorProperty->getValue($executor);
+        self::assertInstanceOf(ErrorHandlingExecutorDecorator::class, $decorator);
+
+        $innerExecutorProperty = new ReflectionProperty(ErrorHandlingExecutorDecorator::class, 'executor');
+        $initializer = $innerExecutorProperty->getValue($decorator);
+        self::assertInstanceOf(InitializingMethodExecutor::class, $initializer);
+        $localExecutorProperty = new ReflectionProperty(InitializingMethodExecutor::class, 'executor');
+        self::assertInstanceOf(LocalMethodExecutor::class, $localExecutorProperty->getValue($initializer));
+    }
+
+    public function testSamplerExecutorWrapsBootstrapInitializationFailures(): void
+    {
+        $bootstrap = tempnam(sys_get_temp_dir(), 'sampler-bootstrap-failure-');
+        self::assertNotFalse($bootstrap);
+        file_put_contents($bootstrap, '<?php throw new \LogicException("bootstrap failed");');
+
+        try {
+            $executor = $this->makeContainer([
+                RunnerExtension::PARAM_BOOTSTRAP => $bootstrap,
+            ])->get(SamplerExecutor::class . '.composite');
+            self::assertInstanceOf(CompositeExecutor::class, $executor);
+
+            $executor->executeMethods(
+                new MethodExecutorContext(__FILE__, ExecutorFixtureBenchmark::class),
+                ['beforeClass'],
+            );
+            self::fail('Expected an ExecutionError');
+        } catch (ExecutionError $error) {
+            self::assertSame(
+                sprintf(
+                    'Could not execute method(s) "beforeClass" on "%s"',
+                    ExecutorFixtureBenchmark::class,
+                ),
+                $error->getMessage(),
+            );
+            self::assertInstanceOf(\LogicException::class, $error->getPrevious());
+            self::assertSame('bootstrap failed', $error->getPrevious()->getMessage());
+        } finally {
+            unlink($bootstrap);
+        }
+    }
+
+    public function testSamplerBootstrapAndDefaultMetricsReachTheExecutor(): void
+    {
+        $bootstrap = tempnam(sys_get_temp_dir(), 'sampler-extension-bootstrap-');
+        self::assertNotFalse($bootstrap);
+        file_put_contents($bootstrap, '<?php
+            jbboehr\PhpBenchPerfidious\Tests\Fixtures\ExecutorFixtureBenchmark::$callCount = 40;
+        ');
+        ExecutorFixtureBenchmark::$callCount = 0;
+
+        try {
+            $container = $this->makeContainer([RunnerExtension::PARAM_BOOTSTRAP => $bootstrap]);
+            $executor = $container->get(SamplerExecutor::class);
+            self::assertInstanceOf(SamplerExecutor::class, $executor);
+            $results = $executor->execute(
+                new ExecutionContext(ExecutorFixtureBenchmark::class, '', 'increments'),
+                new Config('test', []),
+            );
+
+            self::assertSame(41, ExecutorFixtureBenchmark::$callCount);
+            $result = $results->byType(SamplerResult::class)->first();
+            self::assertInstanceOf(SamplerResult::class, $result);
+            self::assertSame(['cpu_time_raw', 'cpu_time'], array_keys($result->values));
+        } finally {
+            unlink($bootstrap);
+        }
+    }
+
+    #[RequiresOperatingSystem('Linux')]
+    public function testCustomSamplerMetricsAreIndependentOfLinuxMetrics(): void
+    {
+        $container = $this->makeContainer([
+            PerfidiousExtension::PARAM_PERFIDIOUS_METRICS => ['page-faults', 'cpu-time'],
+        ]);
+        self::assertSame(
+            ['perf::PERF_COUNT_SW_CPU_CLOCK'],
+            $container->getParameter(PerfidiousExtension::PARAM_PERFIDIOUS_LINUX_METRICS),
+        );
+        $executor = $container->get(SamplerExecutor::class . '.composite');
+        self::assertInstanceOf(CompositeExecutor::class, $executor);
+        $results = $executor->execute(
+            new ExecutionContext(ExecutorFixtureBenchmark::class, '', 'passes'),
+            new Config('test', []),
+        );
+
+        $result = $results->byType(SamplerResult::class)->first();
+        self::assertInstanceOf(SamplerResult::class, $result);
+        self::assertSame(
+            ['page_faults_raw', 'page_faults', 'cpu_time_raw', 'cpu_time'],
+            array_keys($result->values),
+        );
     }
 
     public function testRegistersExecutorUnderPerfidiousLinuxTag(): void

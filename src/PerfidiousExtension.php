@@ -22,6 +22,7 @@
 
 namespace jbboehr\PhpBenchPerfidious;
 
+use jbboehr\PhpBenchPerfidious\Executor\InitializingMethodExecutor;
 use jbboehr\PhpBenchPerfidious\Executor\LinuxRemoteExecutor;
 use jbboehr\PhpBenchPerfidious\Progress\PerfidiousProgressLogger;
 use jbboehr\PhpBenchPerfidious\Progress\VariantSummaryFormatter;
@@ -47,15 +48,33 @@ class PerfidiousExtension implements ExtensionInterface
 {
     final public const PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT = 'perfidious.progress_summary_baseline_format';
     final public const PARAM_PROGRESS_SUMMARY_FORMAT = 'perfidious.progress_summary_variant_format';
+    final public const PARAM_PERFIDIOUS_METRICS = 'perfidious.metrics';
     final public const PARAM_PERFIDIOUS_LINUX_METRICS = 'perfidious.linux.metrics';
 
     public function configure(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
+            self::PARAM_PERFIDIOUS_METRICS => SamplerExecutor::DEFAULT_METRICS,
             self::PARAM_PERFIDIOUS_LINUX_METRICS => LinuxExecutor::DEFAULT_METRICS,
             self::PARAM_PROGRESS_SUMMARY_FORMAT => VariantSummaryFormatter::DEFAULT_FORMAT,
             self::PARAM_PROGRESS_SUMMARY_BASELINE_FORMAT => VariantSummaryFormatter::BASELINE_FORMAT,
         ]);
+        $resolver->setAllowedTypes(self::PARAM_PERFIDIOUS_METRICS, 'array');
+        $resolver->setAllowedValues(
+            self::PARAM_PERFIDIOUS_METRICS,
+            static function (array $metrics): bool {
+                if ([] === $metrics || !array_is_list($metrics)) {
+                    return false;
+                }
+                foreach ($metrics as $metric) {
+                    if (!is_string($metric) || !in_array($metric, SamplerExecutor::METRICS, true)) {
+                        return false;
+                    }
+                }
+
+                return count(array_unique($metrics)) === count($metrics);
+            },
+        );
         $resolver->setAllowedTypes(self::PARAM_PERFIDIOUS_LINUX_METRICS, 'array');
         $resolver->setAllowedValues(
             self::PARAM_PERFIDIOUS_LINUX_METRICS,
@@ -75,6 +94,23 @@ class PerfidiousExtension implements ExtensionInterface
 
     public function load(Container $container): void
     {
+        $container->register(SamplerExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
+            return new CompositeExecutor(
+                self::get($container, SamplerExecutor::class),
+                new ErrorHandlingExecutorDecorator(new InitializingMethodExecutor(
+                    self::get($container, LocalMethodExecutor::class),
+                    self::getBootstrap($container),
+                )),
+            );
+        }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious']]);
+
+        $container->register(SamplerExecutor::class, static function (Container $container): SamplerExecutor {
+            return SamplerExecutor::withMetrics(
+                metrics: self::getStringListParameter($container, self::PARAM_PERFIDIOUS_METRICS),
+                bootstrap: self::getBootstrap($container),
+            );
+        });
+
         $container->register(LinuxExecutor::class . '.composite', static function (Container $container): CompositeExecutor {
             $executor = self::get($container, LinuxExecutor::class);
             $localMethodExecutor = self::get($container, LocalMethodExecutor::class);
@@ -86,15 +122,7 @@ class PerfidiousExtension implements ExtensionInterface
         }, [RunnerExtension::TAG_EXECUTOR => ['name' => 'perfidious-linux']]);
 
         $container->register(LinuxExecutor::class, static function (Container $container): LinuxExecutor {
-            $bootstrap = $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP);
-            if (!is_string($bootstrap) && null !== $bootstrap) {
-                throw new \UnexpectedValueException(sprintf(
-                    'Container parameter "%s" must be string or null, got %s',
-                    RunnerExtension::PARAM_BOOTSTRAP,
-                    get_debug_type($bootstrap),
-                ));
-            }
-
+            $bootstrap = self::getBootstrap($container);
             $metrics = self::getStringListParameter($container, self::PARAM_PERFIDIOUS_LINUX_METRICS);
 
             return LinuxExecutor::withMetrics(
@@ -173,6 +201,20 @@ class PerfidiousExtension implements ExtensionInterface
         }
 
         return $object;
+    }
+
+    private static function getBootstrap(Container $container): ?string
+    {
+        $bootstrap = $container->getParameter(RunnerExtension::PARAM_BOOTSTRAP);
+        if (!is_string($bootstrap) && null !== $bootstrap) {
+            throw new \UnexpectedValueException(sprintf(
+                'Container parameter "%s" must be string or null, got %s',
+                RunnerExtension::PARAM_BOOTSTRAP,
+                get_debug_type($bootstrap),
+            ));
+        }
+
+        return $bootstrap;
     }
 
     private static function getParameterString(Container $container, string $name): string

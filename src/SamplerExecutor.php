@@ -34,6 +34,8 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 final class SamplerExecutor implements BenchmarkExecutorInterface
 {
+    public const METRICS = ['cpu-time', 'page-faults', 'context-switches', 'cpu-cycles', 'instructions'];
+
     public const DEFAULT_METRICS = ['cpu-time'];
 
     public function __construct(

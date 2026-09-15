@@ -1,14 +1,16 @@
 # phpbench-perfidious
 
-[PHPBench](https://github.com/phpbench/phpbench) extension for Linux that measures benchmark iterations with hardware
+[PHPBench](https://github.com/phpbench/phpbench) extension that measures benchmark iterations with hardware
 and software performance counters (instructions, cycles, cache misses, page faults, context switches, ...) via
 [`ext-perfidious`](https://github.com/jbboehr/php-perfidious), instead of (or alongside) wall-clock time.
 
 It provides:
 
+- a common sampler **executor** (`perfidious`) that collects metrics through ext-perfidious 0.3.1's sampler API and
+  always supplies elapsed wall time to PHPBench;
 - a benchmark **executor** (`perfidious-linux`) that wraps each variant's revolutions in a `perf_event_open` handle, records
   the counter values, and supplies PHPBench timing data when a supported clock event is configured;
-- a second **executor** (`perfidious-linux-remote`) that does the same thing but in an isolated subprocess per variant,
+- a Linux subprocess **executor** (`perfidious-linux-remote`) that does the same thing in an isolated subprocess per variant,
   like PHPBench's own built-in `remote` executor — see [Remote execution](#remote-execution) below;
 - a **progress logger** (`perfidious-linux`) that adds an instructions-per-iteration summary to PHPBench's verbose progress
   output;
@@ -16,11 +18,11 @@ It provides:
 
 ## Requirements
 
-- Linux with the `perf_events` kernel API available
+- Linux with the `perf_events` kernel API available for the `perfidious-linux` and `perfidious-linux-remote` executors
 - PHP 8.1+ (tested on PHP 8.1–8.5)
 - [phpbench/phpbench](https://github.com/phpbench/phpbench) ^1.4
 - the [`perfidious`](https://github.com/jbboehr/php-perfidious) PHP extension, loaded and enabled (see
-  [Installation](#installation) below)
+  [Installation](#installation) below); version 0.3.1 or newer for the common sampler executor
 
 ## Installation
 
@@ -39,11 +41,54 @@ already in a Nix environment, this repo's own
 [`flake.nix`](https://github.com/jbboehr/phpbench-perfidious/blob/master/flake.nix) devShells
 (`nix develop .#php82`, etc.) give you a PHP build with the extension already compiled in.
 
-If the extension isn't loaded, selecting the `perfidious-linux` executor or calling anything under the `Perfidious\`
-namespace will fail with a PHP fatal error (`Call to undefined function Perfidious\open()`) rather than a friendly
-message — check `php -m | grep perfidious` first if you hit that.
+If the common sampler API is unavailable, the `perfidious` executor asks you to install and enable ext-perfidious 0.3.1
+or newer. The Linux executors can fail with `Call to undefined function Perfidious\open()` when the extension isn't loaded.
+Run `php --ri perfidious` to check that the extension is enabled and verify its version in the PHP CLI you use for
+PHPBench.
 
 ## Quick start
+
+The `perfidious` executor samples the current thread using the common sampler API. In your `phpbench.json`, configure:
+
+```json
+{
+    "runner.bootstrap": "vendor/autoload.php",
+    "runner.path": "tests/Benchmark",
+    "runner.executor": "perfidious",
+    "runner.progress": "dots",
+    "core.extensions": [
+        "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
+    ],
+    "perfidious.metrics": ["cpu-time"]
+}
+```
+
+```shell
+vendor/bin/phpbench run --executor=perfidious --report=default
+```
+
+`perfidious.metrics` defaults to `["cpu-time"]`. It accepts a nonempty list of unique names from `cpu-time`,
+`page-faults`, `context-switches`, `cpu-cycles`, and `instructions`. Availability depends on the operating system,
+permissions, and hardware; requesting an unavailable metric reports an error.
+
+CPU time is measured in nanoseconds; the other metrics are counts. PHPBench's standard time columns show elapsed
+wall time in microseconds, independently of the selected metrics. Raw and per-revolution sampler values are included
+in `--dump` output under the `perfidious_sampler` result. Setup, hooks, and warmup are outside the measured interval.
+
+Use PHPBench's standard progress and report options with this executor. The package's `perfidious` report generator
+and `perfidious-linux` progress logger currently support the Linux perf event executors only.
+The default report's `mem_peak` column shows `ERR` because this in-process executor does not collect memory usage.
+
+This repository includes a profile for selecting the sampler alongside its existing Linux configuration:
+
+```shell
+vendor/bin/phpbench run --profile=perfidious --executor=perfidious --report=default
+```
+
+Keep the explicit `--executor=perfidious` when using class hooks: PHPBench 1.x can use the CLI executor for
+`BeforeClassMethods` and `AfterClassMethods` even when `runner.executor` selects a different executor for subjects.
+
+## Linux perf event execution
 
 In an existing PHPBench project, merge these keys into `phpbench.json`. The `runner.bootstrap` and `runner.path` values
 are standard PHPBench settings; adjust them to match your project:
