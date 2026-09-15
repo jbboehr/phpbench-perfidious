@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the in-process `SamplerExecutor`, which returns sampler metrics and elapsed wall time for PHPBench iterations.
 - Added `Sampler\NativeSampler`, a `SamplerInterface` adapter over ext-perfidious 0.3.1's common sampler API.
 
 ### Changed
