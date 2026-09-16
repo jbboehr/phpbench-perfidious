@@ -54,7 +54,7 @@ final class PhpBenchProfileTest extends TestCase
     }
 
     #[DataProvider('samplerBenchmarkLoading')]
-    public function testSamplerProfileRunsClassHooksAndProducesWallTimeWithTheDefaultReport(bool $autoloadable): void
+    public function testSamplerProfileRunsClassHooksAndProducesTimeAndSamplerReports(bool $autoloadable): void
     {
         $root = dirname(__DIR__);
         $marker = tempnam(sys_get_temp_dir(), 'sampler-class-hooks-');
@@ -92,6 +92,7 @@ final class PhpBenchProfileTest extends TestCase
             '--revs=2',
             '--warmup=1',
             '--report=default',
+            '--report=perfidious',
             '--dump',
             $benchmarkPath,
         ], $root, ['PHPBENCH_SAMPLER_MARKER' => $marker]);
@@ -104,6 +105,7 @@ final class PhpBenchProfileTest extends TestCase
             self::assertStringContainsString('<executor name="perfidious">', $output);
             self::assertStringContainsString('perfidious_sampler-cpu-time-raw=', $output);
             self::assertStringContainsString('time-net=', $output);
+            self::assertMatchesRegularExpression('/\|\s*cpu_time\s*\|/', $output);
             self::assertStringContainsString('SamplerIntegrationBench', $output);
             self::assertStringNotContainsString('PERF-COUNT-HW-INSTRUCTIONS', $output);
             self::assertSame("before-class\nbench\nbench\nbench\nafter-class\n", file_get_contents($marker));

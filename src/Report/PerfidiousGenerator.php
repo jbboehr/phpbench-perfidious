@@ -24,6 +24,7 @@ namespace jbboehr\PhpBenchPerfidious\Report;
 
 use InvalidArgumentException;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
+use jbboehr\PhpBenchPerfidious\SamplerResult;
 use PhpBench\Expression\Ast\IntegerNode;
 use PhpBench\Model\SuiteCollection;
 use PhpBench\Registry\Config;
@@ -36,7 +37,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 class PerfidiousGenerator implements GeneratorInterface
 {
     private const DEFAULT_TITLE = 'Perfidious report';
-    private const DEFAULT_DESCRIPTION = 'Per-iteration hardware/software performance counter results.';
+    private const DEFAULT_DESCRIPTION = 'Per-iteration sampler and Linux performance counter results.';
 
     public function configure(OptionsResolver $options): void
     {
@@ -60,14 +61,17 @@ class PerfidiousGenerator implements GeneratorInterface
 
         foreach ($suiteCollection as $suite) {
             $rows = [];
+            $columns = [];
 
             foreach ($suite->getBenchmarks() as $benchmark) {
                 foreach ($benchmark->getSubjects() as $subject) {
                     foreach ($subject->getVariants() as $variant) {
                         foreach ($variant->getIterations() as $iteration) {
-                            $result = $iteration->getResult(PerfidiousResult::class);
+                            $result = $iteration->hasResult(SamplerResult::class)
+                                ? $iteration->getResult(SamplerResult::class)
+                                : $iteration->getResult(PerfidiousResult::class);
 
-                            // remove original values for now I guess
+                            // Report per-revolution values; raw totals remain available in the result.
                             $values = array_diff_key(
                                 $result->values,
                                 array_flip(array_filter(array_keys($result->values), function (string $key): bool {
@@ -84,9 +88,15 @@ class PerfidiousGenerator implements GeneratorInterface
                             ], $values);
 
                             $rows[] = $row;
+                            $columns += array_fill_keys(array_keys($row), null);
                         }
                     }
                 }
+            }
+
+            // PHPBench uses the first row's headings and renders cells in row order.
+            foreach ($rows as $index => $row) {
+                $rows[$index] = array_replace($columns, $row);
             }
 
             $builder->addObject(

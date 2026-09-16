@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added common sampler support to the `perfidious` report, with aligned columns for mixed metric sets and Linux results.
 - Registered the common sampler executor as `perfidious`, with `perfidious.metrics` configuration and class hook support.
 - Added a `perfidious` profile that uses PHPBench's standard progress output.
 - Added the in-process `SamplerExecutor`, which returns sampler metrics and elapsed wall time for PHPBench iterations.

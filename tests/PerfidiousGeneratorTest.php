@@ -25,6 +25,7 @@ namespace jbboehr\PhpBenchPerfidious\Tests;
 use DateTime;
 use jbboehr\PhpBenchPerfidious\PerfidiousResult;
 use jbboehr\PhpBenchPerfidious\Report\PerfidiousGenerator;
+use jbboehr\PhpBenchPerfidious\SamplerResult;
 use PhpBench\Expression\Ast\PhpValue;
 use PhpBench\Model\ParameterSet;
 use PhpBench\Model\Suite;
@@ -32,6 +33,7 @@ use PhpBench\Model\SuiteCollection;
 use PhpBench\Registry\Config;
 use PhpBench\Report\Model\Table;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -94,7 +96,7 @@ class PerfidiousGeneratorTest extends TestCase
 
         $report = $reports->first();
         $this->assertSame('Perfidious report', $report->title());
-        $this->assertSame('Per-iteration hardware/software performance counter results.', $report->description());
+        $this->assertSame('Per-iteration sampler and Linux performance counter results.', $report->description());
 
         $tables = $report->tables();
         $this->assertCount(1, $tables);
@@ -146,6 +148,123 @@ class PerfidiousGeneratorTest extends TestCase
 
         $this->assertSame('small', $this->cellValue($table, 0, 'parameter_set'));
         $this->assertSame('large', $this->cellValue($table, 1, 'parameter_set'));
+    }
+
+    public function testGenerateSupportsSamplerResults(): void
+    {
+        $suite = new Suite(null, new DateTime());
+        $benchmark = $suite->createBenchmark(self::class);
+        $subject = $benchmark->createSubject('benchSampler');
+        $variant = $subject->createVariant(ParameterSet::fromUnserializedValues('small', []), 10, 0);
+        foreach ([505, 606] as $cpuTime) {
+            $variant->createIteration([
+                SamplerResult::create(10_000, 10, ['cpu-time' => $cpuTime, 'page-faults' => 0]),
+            ]);
+        }
+
+        $report = (new PerfidiousGenerator())->generate(
+            new SuiteCollection([$suite]),
+            new Config('test', []),
+        )->first();
+        self::assertCount(1, $report->tables());
+        $table = array_values($report->tables())[0];
+        self::assertCount(2, $table->rows());
+        self::assertSame([
+            'iter', 'benchmark', 'subject', 'parameter_set', 'revs', 'cpu_time', 'page_faults',
+        ], $table->columnNames());
+        self::assertSame($benchmark->getName(), $this->cellValue($table, 0, 'benchmark'));
+        self::assertSame('benchSampler', $this->cellValue($table, 0, 'subject'));
+        self::assertSame('small', $this->cellValue($table, 0, 'parameter_set'));
+        self::assertSame(10, $this->cellValue($table, 0, 'revs'));
+        self::assertSame(0, $this->cellValue($table, 0, 'iter'));
+        self::assertSame(1, $this->cellValue($table, 1, 'iter'));
+        self::assertSame(50.5, $this->cellValue($table, 0, 'cpu_time'));
+        self::assertSame(60.6, $this->cellValue($table, 1, 'cpu_time'));
+        self::assertSame(0, $this->cellValue($table, 0, 'page_faults'));
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function mixedResultOrder(): iterable
+    {
+        yield 'sampler first' => [false];
+        yield 'Linux first' => [true];
+    }
+
+    #[DataProvider('mixedResultOrder')]
+    public function testGenerateAlignsMixedMetricColumns(bool $linuxFirst): void
+    {
+        $suite = new Suite(null, new DateTime());
+        $benchmark = $suite->createBenchmark(self::class);
+        $results = [
+            'sampler' => SamplerResult::create(10_000, 10, ['cpu-time' => 505, 'page-faults' => 0]),
+            'otherSampler' => SamplerResult::create(20_000, 10, ['page-faults' => 20, 'instructions' => 255]),
+            'linux' => PerfidiousResult::create(1000, 1000, 10, ['perf::PERF_COUNT_HW_INSTRUCTIONS' => 105]),
+        ];
+        if ($linuxFirst) {
+            $results = array_reverse($results, true);
+        }
+        foreach ($results as $name => $result) {
+            $benchmark->createSubject($name)
+                ->createVariant(ParameterSet::fromUnserializedValues('default', []), 10, 0)
+                ->createIteration([$result]);
+        }
+
+        $report = (new PerfidiousGenerator())->generate(
+            new SuiteCollection([$suite]),
+            new Config('test', []),
+        )->first();
+        $table = array_values($report->tables())[0];
+        $metrics = $linuxFirst
+            ? ['perf__PERF_COUNT_HW_INSTRUCTIONS', 'page_faults', 'instructions', 'cpu_time']
+            : ['cpu_time', 'page_faults', 'instructions', 'perf__PERF_COUNT_HW_INSTRUCTIONS'];
+        self::assertSame([
+            'iter', 'benchmark', 'subject', 'parameter_set', 'revs', ...$metrics,
+        ], $table->columnNames());
+        self::assertCount(3, $table->rows());
+        foreach ($table->rows() as $index => $row) {
+            self::assertSame($table->columnNames(), $row->keys());
+            $name = $this->cellValue($table, $index, 'subject');
+            self::assertSame('sampler' === $name ? 50.5 : null, $this->cellValue($table, $index, 'cpu_time'));
+            self::assertSame(match ($name) {
+                'sampler' => 0,
+                'otherSampler' => 2,
+                default => null,
+            }, $this->cellValue($table, $index, 'page_faults'));
+            self::assertSame('otherSampler' === $name ? 25.5 : null, $this->cellValue($table, $index, 'instructions'));
+            self::assertSame('linux' === $name ? 10.5 : null, $this->cellValue($table, $index, 'perf__PERF_COUNT_HW_INSTRUCTIONS'));
+        }
+    }
+
+    public function testGenerateKeepsMetricColumnsWithinEachSuite(): void
+    {
+        $suites = [];
+        foreach ([
+            ['sampler', SamplerResult::create(10_000, 10, ['cpu-time' => 505])],
+            ['linux', PerfidiousResult::create(1000, 1000, 10, ['perf::PERF_COUNT_HW_INSTRUCTIONS' => 105])],
+        ] as [$name, $result]) {
+            $suite = new Suite(null, new DateTime());
+            $suite->createBenchmark(self::class)
+                ->createSubject($name)
+                ->createVariant(ParameterSet::fromUnserializedValues('default', []), 10, 0)
+                ->createIteration([$result]);
+            $suites[] = $suite;
+        }
+
+        $report = (new PerfidiousGenerator())->generate(
+            new SuiteCollection($suites),
+            new Config('test', []),
+        )->first();
+        $tables = array_values($report->tables());
+
+        self::assertCount(2, $tables);
+        self::assertSame([
+            'iter', 'benchmark', 'subject', 'parameter_set', 'revs', 'cpu_time',
+        ], $tables[0]->columnNames());
+        self::assertSame([
+            'iter', 'benchmark', 'subject', 'parameter_set', 'revs', 'perf__PERF_COUNT_HW_INSTRUCTIONS',
+        ], $tables[1]->columnNames());
+        self::assertSame(50.5, $this->cellValue($tables[0], 0, 'cpu_time'));
+        self::assertSame(10.5, $this->cellValue($tables[1], 0, 'perf__PERF_COUNT_HW_INSTRUCTIONS'));
     }
 
     public function testGenerateUsesConfiguredTitleAndDescription(): void

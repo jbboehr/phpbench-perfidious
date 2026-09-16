@@ -14,7 +14,7 @@ It provides:
   like PHPBench's own built-in `remote` executor — see [Remote execution](#remote-execution) below;
 - a **progress logger** (`perfidious-linux`) that adds an instructions-per-iteration summary to PHPBench's verbose progress
   output;
-- a **report generator** (`perfidious`) that renders the raw and per-revolution-normalized counter values in a table.
+- a **report generator** (`perfidious`) that renders sampler and Linux counter values per revolution in a table.
 
 ## Requirements
 
@@ -59,12 +59,17 @@ The `perfidious` executor samples the current thread using the common sampler AP
     "core.extensions": [
         "jbboehr\\PhpBenchPerfidious\\PerfidiousExtension"
     ],
+    "report.generators": {
+        "perfidious": {
+            "generator": "perfidious"
+        }
+    },
     "perfidious.metrics": ["cpu-time"]
 }
 ```
 
 ```shell
-vendor/bin/phpbench run --executor=perfidious --report=default
+vendor/bin/phpbench run --executor=perfidious --report=perfidious
 ```
 
 `perfidious.metrics` defaults to `["cpu-time"]`. It accepts a nonempty list of unique names from `cpu-time`,
@@ -75,14 +80,19 @@ CPU time is measured in nanoseconds; the other metrics are counts. PHPBench's st
 wall time in microseconds, independently of the selected metrics. Raw and per-revolution sampler values are included
 in `--dump` output under the `perfidious_sampler` result. Setup, hooks, and warmup are outside the measured interval.
 
-Use PHPBench's standard progress and report options with this executor. The package's `perfidious` report generator
-and `perfidious-linux` progress logger currently support the Linux perf event executors only.
-The default report's `mem_peak` column shows `ERR` because this in-process executor does not collect memory usage.
+The `perfidious` report shows one row per iteration, with parameter-set names and per-revolution metric columns such
+as `cpu_time` (nanoseconds per revolution) and `page_faults` (faults per revolution). Raw totals are omitted from the
+table. Reports containing different metric sets, including both sampler and Linux results, retain every metric column;
+a missing value means that metric was not collected for that row, while zero is a measured value.
+
+Use PHPBench's standard progress output with this executor; the `perfidious-linux` progress logger supports the Linux
+perf event executors only. Add `--report=default` to also see PHPBench's wall-time report. Its `mem_peak` column shows
+`ERR` because this in-process executor does not collect memory usage.
 
 This repository includes a profile for selecting the sampler alongside its existing Linux configuration:
 
 ```shell
-vendor/bin/phpbench run --profile=perfidious --executor=perfidious --report=default
+vendor/bin/phpbench run --profile=perfidious --executor=perfidious --report=perfidious
 ```
 
 Keep the explicit `--executor=perfidious` when using class hooks: PHPBench 1.x can use the CLI executor for
